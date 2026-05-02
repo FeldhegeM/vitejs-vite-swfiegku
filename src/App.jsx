@@ -190,7 +190,33 @@ export default function App() {
   const [sendPwError, setSendPwError] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { loadAll(); }, []);
+  useEffect(() => {
+    loadAll();
+
+    // Echtzeit-Updates für Bestellungen
+    const channel = sb.channel("orders-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
+        if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
+          const r = payload.new;
+          setOrders(prev => ({
+            ...prev,
+            [r.drink_id]: { ...(prev[r.drink_id] || {}), [r.person_id]: r.quantity }
+          }));
+        } else if (payload.eventType === "DELETE") {
+          const r = payload.old;
+          setOrders(prev => {
+            const updated = { ...prev };
+            if (updated[r.drink_id]) {
+              delete updated[r.drink_id][r.person_id];
+            }
+            return updated;
+          });
+        }
+      })
+      .subscribe();
+
+    return () => { sb.removeChannel(channel); };
+  }, []);
 
   const loadAll = async () => {
     setLoading(true);
@@ -438,4 +464,3 @@ export default function App() {
     </div>
   );
 }
-
