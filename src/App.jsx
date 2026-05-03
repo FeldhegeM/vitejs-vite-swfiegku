@@ -184,7 +184,7 @@ function BillingModal({ drinks, persons, orders, returns, onClose }) {
                   )}
                   <div style={{borderTop:"2px solid #1a3a2a",marginTop:10,paddingTop:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <span style={{fontSize:14,fontWeight:700,color:"#1a3a2a"}}>Zu zahlen</span>
-                    <span style={{fontSize:22,fontWeight:700,color:toPay>0?"#1a3a2a":"#16a34a"}}>{fmt(toPay)}</span>
+                    <span style={{fontSize:22,fontWeight:700,color:toPay>0?"#1a3a2a":"#16a34a"}}>{fmt(cost-ret)}</span>
                   </div>
                 </div>
               </div>
@@ -284,6 +284,33 @@ export default function App() {
     await sb.from("returns").upsert({drink_id:drinkId,person_id:selectedPerson,quantity:parsed},{onConflict:"drink_id,person_id"});
   };
 
+  const handleDrinkFieldChange = (id, field, val) => {
+    setDrinks(prev => prev.map(d => d.id === id ? { ...d, [field]: field==="price"||field==="deposit" ? val : val } : d));
+  };
+  const saveDrinkField = async (id, field, val) => {
+    const update = { [field]: field==="price"||field==="deposit" ? parseFloat(val)||0 : val };
+    await sb.from("drinks").update(update).eq("id", id);
+  };
+  const handlePersonNameChange = (id, name) => {
+    setPersons(prev => prev.map(p => p.id === id ? { ...p, name } : p));
+  };
+  const savePersonName = async (id, name) => {
+    await sb.from("persons").update({ name }).eq("id", id);
+  };
+
+  const handleDrinkFieldChange = (id, field, val) => {
+    setDrinks(prev=>prev.map(d=>d.id===id?{...d,[field]:field==="price"||field==="deposit"?parseFloat(val)||0:val}:d));
+  };
+  const saveDrinkField = async (id, field, val) => {
+    await sb.from("drinks").update({[field]:val}).eq("id",id);
+  };
+  const handlePersonNameChange = (id, val) => {
+    setPersons(prev=>prev.map(p=>p.id===id?{...p,name:val}:p));
+  };
+  const savePersonName = async (id, val) => {
+    await sb.from("persons").update({name:val}).eq("id",id);
+  };
+
   const getQty = (drinkId) => !selectedPerson?"":((activeTab==="order"?orders:returns)[drinkId]?.[selectedPerson]||"");
   const getTotalOrdered = (drinkId) => Object.values(orders[drinkId]||{}).reduce((s,v)=>s+(parseInt(v)||0),0);
   const getTotalReturned = (drinkId) => Object.values(returns[drinkId]||{}).reduce((s,v)=>s+(parseInt(v)||0),0);
@@ -369,9 +396,18 @@ export default function App() {
           <div style={{color:"#a5d6a7",fontSize:10,letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>👤 Wer bestellt?</div>
           <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
             {persons.map(p=>(
-              <button key={p.id} onClick={()=>setSelectedPerson(p.id)} style={{padding:"9px 18px",borderRadius:50,border:"2px solid",borderColor:selectedPerson===p.id?"#4ade80":"rgba(255,255,255,0.2)",background:selectedPerson===p.id?"rgba(74,222,128,0.15)":"rgba(255,255,255,0.05)",color:selectedPerson===p.id?"#4ade80":"#d1fae5",fontSize:14,fontWeight:selectedPerson===p.id?700:400,cursor:"pointer"}}>
-                {selectedPerson===p.id?"✓ ":""}{p.name}
-              </button>
+              <div key={p.id} style={{display:"flex",alignItems:"center",gap:0,borderRadius:50,border:"2px solid",borderColor:selectedPerson===p.id?"#4ade80":"rgba(255,255,255,0.2)",background:selectedPerson===p.id?"rgba(74,222,128,0.15)":"rgba(255,255,255,0.05)",overflow:"hidden"}}>
+                <button onClick={()=>setSelectedPerson(p.id)} style={{padding:"9px 6px 9px 14px",background:"none",border:"none",color:selectedPerson===p.id?"#4ade80":"#d1fae5",fontSize:13,fontWeight:selectedPerson===p.id?700:400,cursor:"pointer"}}>
+                  {selectedPerson===p.id?"✓ ":""}
+                </button>
+                <input
+                  value={p.name}
+                  onChange={e=>handlePersonNameChange(p.id,e.target.value)}
+                  onBlur={()=>savePersonName(p.id,p.name)}
+                  onClick={()=>setSelectedPerson(p.id)}
+                  style={{background:"none",border:"none",color:selectedPerson===p.id?"#4ade80":"#d1fae5",fontSize:13,fontWeight:selectedPerson===p.id?700:400,outline:"none",cursor:"text",padding:"9px 14px 9px 0",width:Math.max(60,p.name.length*8)+"px"}}
+                />
+              </div>
             ))}
           </div>
           {!selectedPerson && <div style={{color:"#f59e0b",fontSize:12,marginTop:10}}>↑ Bitte zuerst eine Person auswählen</div>}
@@ -399,11 +435,27 @@ export default function App() {
             const totalR = getTotalReturned(drink.id);
             const onChange = activeTab==="order" ? handleQtyChange : handleReturnChange;
             return (
-              <div key={drink.id} style={{background:totalO>0?"rgba(74,222,128,0.08)":"rgba(255,255,255,0.04)",border:"1px solid",borderColor:totalO>0?"rgba(74,222,128,0.3)":"rgba(255,255,255,0.1)",borderRadius:14,padding:"13px 16px",display:"flex",alignItems:"center",gap:10}}>
+              <div key={drink.id} style={{background:totalO>0?"rgba(74,222,128,0.08)":"rgba(255,255,255,0.04)",border:"1px solid",borderColor:totalO>0?"rgba(74,222,128,0.3)":"rgba(255,255,255,0.1)",borderRadius:14,padding:"13px 16px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
                 <div style={{fontSize:24,flexShrink:0}}>{drink.emoji}</div>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{color:"#f0fdf4",fontSize:14,fontWeight:600}}>{drink.name}</div>
-                  <div style={{color:"#6ee7b7",fontSize:11,marginTop:1}}>{fmt(parseFloat(drink.price)||0)} + {fmt(parseFloat(drink.deposit)||0)} Pfand</div>
+                <div style={{flex:1,minWidth:120}}>
+                  <input
+                    value={drink.name}
+                    onChange={e=>handleDrinkFieldChange(drink.id,"name",e.target.value)}
+                    onBlur={()=>saveDrinkField(drink.id,"name",drink.name)}
+                    style={{background:"none",border:"none",borderBottom:"1px dashed rgba(255,255,255,0.2)",color:"#f0fdf4",fontSize:14,fontWeight:600,width:"100%",outline:"none",cursor:"text",padding:"0 0 1px"}}
+                  />
+                  <div style={{display:"flex",gap:6,alignItems:"center",marginTop:3}}>
+                    <input type="number" step="0.1" value={parseFloat(drink.price)||0}
+                      onChange={e=>handleDrinkFieldChange(drink.id,"price",e.target.value)}
+                      onBlur={()=>saveDrinkField(drink.id,"price",drink.price)}
+                      style={{background:"none",border:"none",borderBottom:"1px dashed rgba(99,230,190,0.3)",color:"#6ee7b7",fontSize:11,width:46,outline:"none"}}/>
+                    <span style={{color:"#6ee7b7",fontSize:11}}>€ + </span>
+                    <input type="number" step="0.1" value={parseFloat(drink.deposit)||0}
+                      onChange={e=>handleDrinkFieldChange(drink.id,"deposit",e.target.value)}
+                      onBlur={()=>saveDrinkField(drink.id,"deposit",drink.deposit)}
+                      style={{background:"none",border:"none",borderBottom:"1px dashed rgba(99,230,190,0.3)",color:"#6ee7b7",fontSize:11,width:40,outline:"none"}}/>
+                    <span style={{color:"#6ee7b7",fontSize:11}}>€ Pfand</span>
+                  </div>
                 </div>
                 <div style={{display:"flex",flexDirection:"column",gap:3,alignItems:"flex-end"}}>
                   {totalO>0 && <div style={{background:"rgba(74,222,128,0.2)",color:"#4ade80",padding:"2px 7px",borderRadius:20,fontSize:10,fontWeight:700}}>∑ {totalO}</div>}
@@ -436,11 +488,17 @@ export default function App() {
                   const pd=drinks.filter(d=>(orders[d.id]?.[p.id]||0)>0);
                   if(!pd.length)return null;
                   const pTotal=pd.reduce((s,d)=>s+(parseInt(orders[d.id]?.[p.id])||0),0);
-                  const pCost=pd.reduce((s,d)=>s+(parseInt(orders[d.id]?.[p.id])||0)*((parseFloat(d.price)||0)+(parseFloat(d.deposit)||0)),0);
+                  const pGross=pd.reduce((s,d)=>s+(parseInt(orders[d.id]?.[p.id])||0)*((parseFloat(d.price)||0)+(parseFloat(d.deposit)||0)),0);
+                  const pDepositPaid=pd.reduce((s,d)=>s+(parseInt(orders[d.id]?.[p.id])||0)*(parseFloat(d.deposit)||0),0);
+                  const pReturnAmt=drinks.reduce((s,d)=>s+(parseInt(returns[d.id]?.[p.id])||0)*(parseFloat(d.deposit)||0),0);
+                  const pNet=pGross-pReturnAmt;
                   return (
                     <div key={p.id} style={{marginBottom:14}}>
-                      <div style={{color:"#f0fdf4",fontSize:14,fontWeight:700,marginBottom:4}}>
-                        👤 {p.name} <span style={{color:"#4ade80",fontWeight:400,fontSize:12}}>({pTotal} Kasten · {fmt(pCost)})</span>
+                      <div style={{color:"#f0fdf4",fontSize:14,fontWeight:700,marginBottom:4,display:"flex",alignItems:"center",gap:8}}>
+                        <span>👤</span>
+                        <input value={p.name} onChange={e=>handlePersonNameChange(p.id,e.target.value)} onBlur={()=>savePersonName(p.id,p.name)}
+                          style={{background:"none",border:"none",borderBottom:"1px dashed rgba(255,255,255,0.3)",color:"#f0fdf4",fontSize:14,fontWeight:700,outline:"none",cursor:"text",padding:"0 0 1px",minWidth:80}}/>
+                        <span style={{color:"#4ade80",fontWeight:400,fontSize:12}}>({pTotal} Kasten)</span>
                       </div>
                       {pd.map(d=>{
                         const q=parseInt(orders[d.id]?.[p.id])||0;
@@ -452,11 +510,39 @@ export default function App() {
                           </div>
                         );
                       })}
+                      <div style={{paddingLeft:18,marginTop:4,fontSize:12,color:"#a5d6a7"}}>
+                        Einkauf+Pfand: {fmt(pGross)}
+                        {pReturnAmt>0 && <span style={{color:"#4ade80"}}> · Pfandrückgabe: −{fmt(pReturnAmt)}</span>}
+                        <span style={{color:"#fde68a",fontWeight:700}}> · Zu zahlen: {fmt(pGross-pReturnAmt)}</span>
+                      </div>
                     </div>
                   );
                 })}
-                <div style={{borderTop:"1px solid rgba(255,255,255,0.1)",paddingTop:10,marginTop:4,color:"#fff",fontSize:15,fontWeight:700}}>
-                  Gesamt: <span style={{color:"#4ade80"}}>{grandTotal} Kästen</span>
+                <div style={{borderTop:"1px solid rgba(255,255,255,0.15)",paddingTop:12,marginTop:4}}>
+                  {(()=>{
+                    const totalKasten=grandTotal;
+                    const totalBrutto=drinks.reduce((s,d)=>s+getTotalOrdered(d.id)*((parseFloat(d.price)||0)+(parseFloat(d.deposit)||0)),0);
+                    const totalPfandBezahlt=drinks.reduce((s,d)=>s+getTotalOrdered(d.id)*(parseFloat(d.deposit)||0),0);
+                    const totalNetto=totalBrutto-totalPfandBezahlt;
+                    const totalRueckgabe=drinks.reduce((s,d)=>s+getTotalReturned(d.id)*(parseFloat(d.deposit)||0),0);
+                    const totalZahlen=totalNetto-totalRueckgabe;
+                    return (
+                      <div>
+                        <div style={{display:"flex",justifyContent:"space-between",color:"#fde68a",fontSize:15,fontWeight:700,marginBottom:totalRueckgabe>0?4:0}}>
+                          <span>Einkauf + Pfand</span><span>{fmt(totalBrutto)}</span>
+                        </div>
+                        {totalRueckgabe>0 && <>
+                          <div style={{display:"flex",justifyContent:"space-between",color:"#4ade80",fontSize:13,marginBottom:6}}>
+                            <span>♻️ Pfandrückgabe</span><span>−{fmt(totalRueckgabe)}</span>
+                          </div>
+                          <div style={{display:"flex",justifyContent:"space-between",color:"#fff",fontSize:16,fontWeight:700,borderTop:"1px solid rgba(255,255,255,0.2)",paddingTop:8}}>
+                            <span>Zu zahlen ({totalKasten} Kästen)</span><span style={{color:"#4ade80"}}>{fmt(totalZahlen)}</span>
+                          </div>
+                        </>}
+                        {totalRueckgabe===0 && <div style={{color:"rgba(255,255,255,0.4)",fontSize:12,marginTop:4}}>{totalKasten} Kästen gesamt</div>}
+                      </div>
+                    );
+                  })()}
                 </div>
               </>
             )}
