@@ -74,12 +74,13 @@ function AdminModal({ drinks, persons, dealerEmail, deliveryDate, sendPassword, 
             <div>
               {ld.map(d=>(
                 <div key={d.id} style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,padding:"8px 10px",background:"#f9fafb",borderRadius:10,flexWrap:"wrap"}}>
-                  <span style={{fontSize:18}}>{d.emoji}</span>
-                  <span style={{flex:1,fontSize:13,minWidth:80}}>{d.name}</span>
+                  <input value={d.emoji} onChange={e=>updateDrink(d.id,"emoji",e.target.value)} style={{width:36,padding:4,border:"1px solid #d1fae5",borderRadius:6,textAlign:"center",fontSize:18}}/>
+                  <input value={d.name} onChange={e=>updateDrink(d.id,"name",e.target.value)} style={{flex:1,minWidth:80,padding:"4px 8px",border:"1px solid #d1fae5",borderRadius:6,fontSize:13}}/>
+                  <input value={d.unit} onChange={e=>updateDrink(d.id,"unit",e.target.value)} style={{width:90,padding:"4px 6px",border:"1px solid #d1fae5",borderRadius:6,fontSize:11}}/>
                   <label style={{fontSize:11,color:"#666"}}>Preis</label>
-                  <input type="number" step="0.1" value={d.price} onChange={e=>updateDrink(d.id,"price",e.target.value)} style={{width:60,padding:"3px 6px",border:"1px solid #d1fae5",borderRadius:6,fontSize:13,textAlign:"right"}}/>
+                  <input type="number" step="0.1" value={d.price} onChange={e=>updateDrink(d.id,"price",e.target.value)} style={{width:56,padding:"3px 6px",border:"1px solid #d1fae5",borderRadius:6,fontSize:13,textAlign:"right"}}/>
                   <span style={{fontSize:11,color:"#666"}}>€ Pfand</span>
-                  <input type="number" step="0.1" value={d.deposit} onChange={e=>updateDrink(d.id,"deposit",e.target.value)} style={{width:52,padding:"3px 6px",border:"1px solid #d1fae5",borderRadius:6,fontSize:13,textAlign:"right"}}/>
+                  <input type="number" step="0.1" value={d.deposit} onChange={e=>updateDrink(d.id,"deposit",e.target.value)} style={{width:46,padding:"3px 6px",border:"1px solid #d1fae5",borderRadius:6,fontSize:13,textAlign:"right"}}/>
                   <span style={{fontSize:11,color:"#666"}}>€</span>
                   <button onClick={()=>setLd(prev=>prev.filter(x=>x.id!==d.id))} style={{background:"#fee2e2",border:"none",borderRadius:6,padding:"3px 8px",cursor:"pointer",color:"#dc2626",fontSize:12}}>✕</button>
                 </div>
@@ -99,7 +100,8 @@ function AdminModal({ drinks, persons, dealerEmail, deliveryDate, sendPassword, 
               {lp.map(p=>(
                 <div key={p.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,padding:"8px 12px",background:"#f9fafb",borderRadius:8}}>
                   <span style={{fontSize:18}}>👤</span>
-                  <div style={{flex:1}}><div style={{fontSize:14,fontWeight:600}}>{p.name}</div><div style={{fontSize:11,color:"#888"}}>{p.email}</div></div>
+                  <input value={p.name} onChange={e=>setLp(prev=>prev.map(x=>x.id===p.id?{...x,name:e.target.value}:x))} style={{flex:1,padding:"4px 8px",border:"1px solid #d1fae5",borderRadius:6,fontSize:14,fontWeight:600}}/>
+                  <input value={p.email} onChange={e=>setLp(prev=>prev.map(x=>x.id===p.id?{...x,email:e.target.value}:x))} style={{flex:1,minWidth:140,padding:"4px 8px",border:"1px solid #d1fae5",borderRadius:6,fontSize:12,color:"#666"}}/>
                   <button onClick={()=>setLp(prev=>prev.filter(x=>x.id!==p.id))} style={{background:"#fee2e2",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",color:"#dc2626",fontSize:12}}>✕</button>
                 </div>
               ))}
@@ -577,3 +579,4 @@ export default function App() {
     </div>
   );
 }
+
