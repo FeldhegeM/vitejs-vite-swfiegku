@@ -285,24 +285,10 @@ export default function App() {
   };
 
   const handleDrinkFieldChange = (id, field, val) => {
-    setDrinks(prev => prev.map(d => d.id === id ? { ...d, [field]: field==="price"||field==="deposit" ? val : val } : d));
-  };
-  const saveDrinkField = async (id, field, val) => {
-    const update = { [field]: field==="price"||field==="deposit" ? parseFloat(val)||0 : val };
-    await sb.from("drinks").update(update).eq("id", id);
-  };
-  const handlePersonNameChange = (id, name) => {
-    setPersons(prev => prev.map(p => p.id === id ? { ...p, name } : p));
-  };
-  const savePersonName = async (id, name) => {
-    await sb.from("persons").update({ name }).eq("id", id);
-  };
-
-  const handleDrinkFieldChange = (id, field, val) => {
     setDrinks(prev=>prev.map(d=>d.id===id?{...d,[field]:field==="price"||field==="deposit"?parseFloat(val)||0:val}:d));
   };
   const saveDrinkField = async (id, field, val) => {
-    await sb.from("drinks").update({[field]:val}).eq("id",id);
+    await sb.from("drinks").update({[field]:field==="price"||field==="deposit"?parseFloat(val)||0:val}).eq("id",id);
   };
   const handlePersonNameChange = (id, val) => {
     setPersons(prev=>prev.map(p=>p.id===id?{...p,name:val}:p));
@@ -310,6 +296,7 @@ export default function App() {
   const savePersonName = async (id, val) => {
     await sb.from("persons").update({name:val}).eq("id",id);
   };
+
 
   const getQty = (drinkId) => !selectedPerson?"":((activeTab==="order"?orders:returns)[drinkId]?.[selectedPerson]||"");
   const getTotalOrdered = (drinkId) => Object.values(orders[drinkId]||{}).reduce((s,v)=>s+(parseInt(v)||0),0);
@@ -590,4 +577,3 @@ export default function App() {
     </div>
   );
 }
-
