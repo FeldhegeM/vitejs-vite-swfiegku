@@ -24,7 +24,7 @@ const DEFAULT_PERSONS = [
   { id:3, name:"Familie Schmidt", email:"schmidt@example.de" },
 ];
 const SEND_PASSWORD = "bestellen";
-const ADMIN_PIN = "1234";
+const ADMIN_PIN_DEFAULT = "1234";
 const fmt = (n) => Number(n).toFixed(2).replace(".",",") + " €";
 
 function formatDate(s) { if(!s) return "–"; const [y,m,d]=s.split("-"); return `${d}.${m}.${y}`; }
@@ -33,12 +33,13 @@ function formatDeadline(s) { const d=deadlineDate(s); if(!d) return "–"; retur
 function isDeadlinePassed(s) { const d=deadlineDate(s); return d ? new Date()>d : false; }
 
 // ─── Admin Modal ──────────────────────────────────────────────────────────────
-function AdminModal({ drinks, persons, dealerEmail, deliveryDate, sendPassword, onSave, onClose }) {
+function AdminModal({ drinks, persons, dealerEmail, deliveryDate, sendPassword, adminPin, onSave, onClose }) {
   const [ld, setLd] = useState(drinks.map(d=>({...d})));
   const [lp, setLp] = useState(persons.map(p=>({...p})));
   const [lDealer, setLDealer] = useState(dealerEmail);
   const [lDel, setLDel] = useState(deliveryDate||"");
   const [lPw, setLPw] = useState(sendPassword||SEND_PASSWORD);
+  const [lPin, setLPin] = useState(adminPin||ADMIN_PIN_DEFAULT);
   const [tab, setTab] = useState("drinks");
   const [nd, setNd] = useState({name:"",emoji:"🍺",unit:"Kasten",price:14.00,deposit:6.60});
   const [np, setNp] = useState({name:"",email:""});
@@ -124,13 +125,15 @@ function AdminModal({ drinks, persons, dealerEmail, deliveryDate, sendPassword, 
               <input type="date" value={lDel} onChange={e=>setLDel(e.target.value)} style={{width:"100%",padding:"10px 14px",border:"1px solid #d1fae5",borderRadius:10,fontSize:15,boxSizing:"border-box",marginBottom:16}}/>
               {lDel && <div style={{background:"#f0fdf4",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#1a3a2a",marginBottom:16}}>📦 {formatDate(lDel)} · ⏰ Bestellschluss: {formatDeadline(lDel)}</div>}
               <label style={{display:"block",marginBottom:8,fontSize:14,color:"#444"}}>🔐 Absende-Passwort:</label>
-              <input type="text" value={lPw} onChange={e=>setLPw(e.target.value)} style={{width:"100%",padding:"10px 14px",border:"1px solid #d1fae5",borderRadius:10,fontSize:15,boxSizing:"border-box"}}/>
+              <input type="text" value={lPw} onChange={e=>setLPw(e.target.value)} style={{width:"100%",padding:"10px 14px",border:"1px solid #d1fae5",borderRadius:10,fontSize:15,boxSizing:"border-box",marginBottom:16}}/>
+              <label style={{display:"block",marginBottom:8,fontSize:14,color:"#444"}}>🔑 Admin-PIN:</label>
+              <input type="text" value={lPin} onChange={e=>setLPin(e.target.value)} style={{width:"100%",padding:"10px 14px",border:"1px solid #d1fae5",borderRadius:10,fontSize:15,boxSizing:"border-box"}}/>
             </div>
           )}
         </div>
         <div style={{padding:"14px 22px",borderTop:"2px solid #e8f5e9",display:"flex",gap:10,justifyContent:"flex-end"}}>
           <button onClick={onClose} style={{padding:"10px 18px",border:"1px solid #ccc",borderRadius:8,background:"none",cursor:"pointer",fontSize:14}}>Abbrechen</button>
-          <button onClick={()=>{onSave({drinks:ld,persons:lp,dealerEmail:lDealer,deliveryDate:lDel,sendPassword:lPw});onClose();}} style={{padding:"10px 22px",background:"#1a3a2a",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontWeight:700,fontSize:14}}>💾 Speichern</button>
+          <button onClick={()=>{onSave({drinks:ld,persons:lp,dealerEmail:lDealer,deliveryDate:lDel,sendPassword:lPw,adminPin:lPin});onClose();}} style={{padding:"10px 22px",background:"#1a3a2a",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontWeight:700,fontSize:14}}>💾 Speichern</button>
         </div>
       </div>
     </div>
@@ -223,6 +226,7 @@ export default function App() {
   const [dealerEmail, setDealerEmail] = useState("haendler@getraenke.de");
   const [deliveryDate, setDeliveryDate] = useState("");
   const [sendPassword, setSendPassword] = useState(SEND_PASSWORD);
+  const [adminPin, setAdminPin] = useState(ADMIN_PIN_DEFAULT);
   const [orders, setOrders] = useState({});
   const [returns, setReturns] = useState({});
   const [selectedPerson, setSelectedPerson] = useState(null);
@@ -257,7 +261,7 @@ export default function App() {
     setLoading(true);
     try {
       const {data:cfg} = await sb.from("config").select("*");
-      if(cfg){ const c=Object.fromEntries(cfg.map(r=>[r.key,r.value])); if(c.delivery_date)setDeliveryDate(c.delivery_date); if(c.dealer_email)setDealerEmail(c.dealer_email); if(c.send_password)setSendPassword(c.send_password); }
+      if(cfg){ const c=Object.fromEntries(cfg.map(r=>[r.key,r.value])); if(c.delivery_date)setDeliveryDate(c.delivery_date); if(c.dealer_email)setDealerEmail(c.dealer_email); if(c.send_password)setSendPassword(c.send_password); if(c.admin_pin)setAdminPin(c.admin_pin); }
       const {data:dd} = await sb.from("drinks").select("*").order("id");
       if(dd&&dd.length>0)setDrinks(dd); else await sb.from("drinks").upsert(DEFAULT_DRINKS);
       const {data:pd} = await sb.from("persons").select("*").order("id");
@@ -337,13 +341,14 @@ export default function App() {
     setSuccessSummary(summary);setShowSuccess(true);
   };
   const handleSuccessClose = async () => { await sb.from("orders").delete().neq("id",0); setOrders({});setShowSuccess(false);setSelectedPerson(null); };
-  const handleAdminSave = async ({drinks:d,persons:p,dealerEmail:de,deliveryDate:dd,sendPassword:sp}) => {
+  const handleAdminSave = async ({drinks:d,persons:p,dealerEmail:de,deliveryDate:dd,sendPassword:sp,adminPin:ap}) => {
     setDrinks(d);setPersons(p);setDealerEmail(de);setDeliveryDate(dd||"");setSendPassword(sp||SEND_PASSWORD);
     await sb.from("drinks").delete().neq("id",0); await sb.from("drinks").insert(d);
     await sb.from("persons").delete().neq("id",0); await sb.from("persons").insert(p);
-    await saveConfig("dealer_email",de); await saveConfig("delivery_date",dd||""); await saveConfig("send_password",sp||SEND_PASSWORD);
+    await saveConfig("dealer_email",de); await saveConfig("delivery_date",dd||""); await saveConfig("send_password",sp||SEND_PASSWORD); await saveConfig("admin_pin",ap||ADMIN_PIN_DEFAULT);
+    if(ap)setAdminPin(ap);
   };
-  const tryAdmin = () => { if(adminCode===ADMIN_PIN){setShowAdminLogin(false);setAdminCode("");setShowAdmin(true);}else setAdminCode(""); };
+  const tryAdmin = () => { if(adminCode===adminPin){setShowAdminLogin(false);setAdminCode("");setShowAdmin(true);}else setAdminCode(""); };
 
   if(loading) return (
     <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#0d2b1a,#1a3a2a)",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -573,10 +578,9 @@ export default function App() {
         </div>
       )}
 
-      {showAdmin && <AdminModal drinks={drinks} persons={persons} dealerEmail={dealerEmail} deliveryDate={deliveryDate} sendPassword={sendPassword} onSave={handleAdminSave} onClose={()=>setShowAdmin(false)}/>}
+      {showAdmin && <AdminModal drinks={drinks} persons={persons} dealerEmail={dealerEmail} deliveryDate={deliveryDate} sendPassword={sendPassword} adminPin={adminPin} onSave={handleAdminSave} onClose={()=>setShowAdmin(false)}/>}
       {showBilling && <BillingModal drinks={drinks} persons={persons} orders={orders} returns={returns} onClose={()=>setShowBilling(false)}/>}
       {showSuccess && <SuccessModal summary={successSummary} onClose={handleSuccessClose}/>}
     </div>
   );
 }
-
