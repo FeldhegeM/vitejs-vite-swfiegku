@@ -325,18 +325,63 @@ export default function App() {
     const ds = new Date().toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit",year:"numeric"});
     let lines=[`🛒 GETRÄNKE-SAMMELBESTELLUNG – ${ds}\n`];
     if(deliveryDate){lines.push(`📦 Lieferung am: ${formatDate(deliveryDate)}`);lines.push(`⏰ Bestellschluss: ${formatDeadline(deliveryDate)}`);}
-    lines.push("═".repeat(44));
-    lines.push("\n📦 GESAMT:\n");
-    drinks.forEach(d=>{const t=getTotalOrdered(d.id);if(t>0)lines.push(`  ${d.emoji} ${d.name}: ${t}× ${fmt(parseFloat(d.price))}`);});
-    lines.push("\n\n👥 PRO PERSON:\n");
+    lines.push("═".repeat(50));
+
+    // Gesamt nach Getränk
+    lines.push("\n📦 GESAMT PRO GETRÄNK:\n");
+    let gesamtGetraenk=0, gesamtPfandGesamt=0;
+    drinks.forEach(d=>{
+      const t=getTotalOrdered(d.id);
+      if(t===0)return;
+      const preisGes=t*(parseFloat(d.price)||0);
+      const pfandGes=t*(parseFloat(d.deposit)||0);
+      gesamtGetraenk+=preisGes; gesamtPfandGesamt+=pfandGes;
+      lines.push(`  ${d.emoji} ${d.name}: ${t}×`);
+      lines.push(`     Getränkepreis: ${t} × ${fmt(parseFloat(d.price))} = ${fmt(preisGes)}`);
+      lines.push(`     Pfand:         ${t} × ${fmt(parseFloat(d.deposit))} = ${fmt(pfandGes)}`);
+    });
+    lines.push(`\n  Getränke gesamt: ${fmt(gesamtGetraenk)}`);
+    lines.push(`  Pfand gesamt:    ${fmt(gesamtPfandGesamt)}`);
+    lines.push(`  BRUTTO gesamt:   ${fmt(gesamtGetraenk+gesamtPfandGesamt)}`);
+
+    // Pro Person
+    lines.push("\n\n" + "═".repeat(50));
+    lines.push("\n👥 PRO PERSON:\n");
+    let gesamtRueckgabe=0;
     persons.forEach(p=>{
       const po=drinks.filter(d=>(orders[d.id]?.[p.id]||0)>0);
-      if(!po.length)return;
-      let total=0; lines.push(`👤 ${p.name}:`);
-      po.forEach(d=>{const q=orders[d.id][p.id];const c=q*((parseFloat(d.price)||0)+(parseFloat(d.deposit)||0));total+=c;lines.push(`  ${d.emoji} ${d.name}: ${q}× = ${fmt(c)}`);});
-      lines.push(`  → Summe: ${fmt(total)}`);lines.push("");
+      const pr=drinks.filter(d=>(returns[d.id]?.[p.id]||0)>0);
+      if(!po.length && !pr.length)return;
+      lines.push(`👤 ${p.name}:`);
+      let pGetraenk=0, pPfand=0, pRueck=0;
+      po.forEach(d=>{
+        const q=parseInt(orders[d.id]?.[p.id])||0;
+        const preis=q*(parseFloat(d.price)||0);
+        const pfand=q*(parseFloat(d.deposit)||0);
+        pGetraenk+=preis; pPfand+=pfand;
+        lines.push(`  ${d.emoji} ${d.name}: ${q}×`);
+        lines.push(`     Getränkepreis: ${q} × ${fmt(parseFloat(d.price))} = ${fmt(preis)}`);
+        lines.push(`     Pfand:         ${q} × ${fmt(parseFloat(d.deposit))} = ${fmt(pfand)}`);
+      });
+      if(pr.length>0){
+        lines.push(`  ♻️ Pfandrückgabe:`);
+        pr.forEach(d=>{
+          const q=parseInt(returns[d.id]?.[p.id])||0;
+          const r=q*(parseFloat(d.deposit)||0);
+          pRueck+=r; gesamtRueckgabe+=r;
+          lines.push(`    ${d.emoji} ${d.name}: ${q}× = −${fmt(r)}`);
+        });
+      }
+      lines.push(`  ─────────────────────────────────`);
+      lines.push(`  Getränke: ${fmt(pGetraenk)}  Pfand: ${fmt(pPfand)}${pRueck>0?`  Rückgabe: −${fmt(pRueck)}`:""}`);
+      lines.push(`  → ZU ZAHLEN: ${fmt(pGetraenk+pPfand-pRueck)}`);
+      lines.push("");
     });
-    lines.push("═".repeat(44));lines.push(`\nGesamt: ${grandTotal} Kästen`);
+
+    lines.push("═".repeat(50));
+    lines.push(`\nGesamt: ${grandTotal} Kästen`);
+    lines.push(`Getränke: ${fmt(gesamtGetraenk)}  Pfand: ${fmt(gesamtPfandGesamt)}  Rückgabe: −${fmt(gesamtRueckgabe)}`);
+    lines.push(`NETTO ZU ZAHLEN: ${fmt(gesamtGetraenk+gesamtPfandGesamt-gesamtRueckgabe)}`);
     return lines.join("\n");
   };
 
