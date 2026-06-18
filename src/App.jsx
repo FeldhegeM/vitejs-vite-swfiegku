@@ -142,6 +142,54 @@ function AdminModal({ drinks, persons, dealerEmail, deliveryDate, sendPassword, 
 
 // ─── Abrechnungs-Modal ────────────────────────────────────────────────────────
 function BillingModal({ drinks, persons, orders, returns, onClose }) {
+
+  const buildBillingText = () => {
+    let lines = ["💶 ABRECHNUNG GETRÄNKE\n"];
+    lines.push("═".repeat(36));
+    persons.forEach(p => {
+      const ordered = drinks.filter(d=>(orders[d.id]?.[p.id]||0)>0);
+      const returned = drinks.filter(d=>(returns[d.id]?.[p.id]||0)>0);
+      if(!ordered.length && !returned.length) return;
+      let cost=0, ret=0;
+      lines.push(`\n👤 ${p.name}:`);
+      ordered.forEach(d=>{
+        const q=parseInt(orders[d.id]?.[p.id])||0;
+        const preis=q*(parseFloat(d.price)||0);
+        const pfand=q*(parseFloat(d.deposit)||0);
+        cost+=preis+pfand;
+        lines.push(`  ${d.emoji} ${d.name}: ${q}×`);
+        lines.push(`     Getränkepreis: ${q} × ${fmt(parseFloat(d.price))} = ${fmt(preis)}`);
+        lines.push(`     Pfand:         ${q} × ${fmt(parseFloat(d.deposit))} = ${fmt(pfand)}`);
+      });
+      if(returned.length>0){
+        lines.push(`  ♻️ Pfandrückgabe:`);
+        returned.forEach(d=>{
+          const q=parseInt(returns[d.id]?.[p.id])||0;
+          const r=q*(parseFloat(d.deposit)||0);
+          ret+=r;
+          lines.push(`    ${d.emoji} ${d.name}: ${q}× = −${fmt(r)}`);
+        });
+      }
+      lines.push(`  ────────────────────────────`);
+      lines.push(`  → ZU ZAHLEN: ${fmt(cost-ret)}`);
+    });
+    lines.push("\n" + "═".repeat(36));
+    return lines.join("\n");
+  };
+
+  const handlePrint = () => {
+    const text = buildBillingText();
+    const win = window.open("","_blank");
+    win.document.write(`<html><head><title>Abrechnung</title><style>body{font-family:monospace;font-size:14px;padding:24px;white-space:pre-wrap;}</style></head><body>${text.replace(/&/g,"&amp;").replace(/</g,"&lt;")}</body></html>`);
+    win.document.close();
+    win.print();
+  };
+
+  const handleWhatsApp = () => {
+    const text = buildBillingText();
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`,"_blank");
+  };
+
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
       <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:560,boxShadow:"0 24px 80px rgba(0,0,0,0.3)",overflow:"hidden",maxHeight:"90vh",display:"flex",flexDirection:"column"}}>
@@ -157,30 +205,37 @@ function BillingModal({ drinks, persons, orders, returns, onClose }) {
             let cost=0, ret=0;
             ordered.forEach(d=>{ const q=parseInt(orders[d.id]?.[p.id])||0; cost+=q*((parseFloat(d.price)||0)+(parseFloat(d.deposit)||0)); });
             returned.forEach(d=>{ const q=parseInt(returns[d.id]?.[p.id])||0; ret+=q*(parseFloat(d.deposit)||0); });
-            const toPay=cost-ret;
             return (
               <div key={p.id} style={{marginBottom:20,background:"#f0fdf4",borderRadius:14,overflow:"hidden"}}>
                 <div style={{background:"#1a3a2a",padding:"10px 16px"}}><span style={{color:"#fff",fontWeight:700,fontSize:14}}>👤 {p.name}</span></div>
                 <div style={{padding:14}}>
                   {ordered.map(d=>{
                     const q=parseInt(orders[d.id]?.[p.id])||0;
-                    const c=q*((parseFloat(d.price)||0)+(parseFloat(d.deposit)||0));
+                    const preis=q*(parseFloat(d.price)||0);
+                    const pfand=q*(parseFloat(d.deposit)||0);
                     return (
-                      <div key={d.id} style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:5,color:"#1a3a2a"}}>
-                        <span>{d.emoji} {d.name} {q}× <span style={{color:"#888",fontSize:11}}>({fmt(parseFloat(d.price))} + {fmt(parseFloat(d.deposit))} Pfand)</span></span>
-                        <span style={{fontWeight:600}}>{fmt(c)}</span>
+                      <div key={d.id} style={{fontSize:13,marginBottom:8,color:"#1a3a2a"}}>
+                        <div style={{fontWeight:600,marginBottom:2}}>{d.emoji} {d.name}: {q}×</div>
+                        <div style={{display:"flex",justifyContent:"space-between",paddingLeft:16,color:"#444",fontSize:12}}>
+                          <span>Getränkepreis: {q} × {fmt(parseFloat(d.price))}</span>
+                          <span>{fmt(preis)}</span>
+                        </div>
+                        <div style={{display:"flex",justifyContent:"space-between",paddingLeft:16,color:"#444",fontSize:12}}>
+                          <span>Pfand: {q} × {fmt(parseFloat(d.deposit))}</span>
+                          <span>{fmt(pfand)}</span>
+                        </div>
                       </div>
                     );
                   })}
                   {returned.length>0 && (
-                    <div style={{marginTop:10,paddingTop:8,borderTop:"1px dashed #ccc"}}>
+                    <div style={{marginTop:8,paddingTop:8,borderTop:"1px dashed #ccc"}}>
                       <div style={{fontSize:12,color:"#666",marginBottom:5}}>♻️ Pfandrückgabe:</div>
                       {returned.map(d=>{
                         const q=parseInt(returns[d.id]?.[p.id])||0;
                         const r=q*(parseFloat(d.deposit)||0);
                         return (
                           <div key={d.id} style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4,color:"#16a34a"}}>
-                            <span>{d.emoji} {d.name} {q}× Pfand</span>
+                            <span>{d.emoji} {d.name}: {q} × {fmt(parseFloat(d.deposit))}</span>
                             <span>−{fmt(r)}</span>
                           </div>
                         );
@@ -189,12 +244,18 @@ function BillingModal({ drinks, persons, orders, returns, onClose }) {
                   )}
                   <div style={{borderTop:"2px solid #1a3a2a",marginTop:10,paddingTop:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <span style={{fontSize:14,fontWeight:700,color:"#1a3a2a"}}>Zu zahlen</span>
-                    <span style={{fontSize:22,fontWeight:700,color:toPay>0?"#1a3a2a":"#16a34a"}}>{fmt(cost-ret)}</span>
+                    <span style={{fontSize:22,fontWeight:700,color:"#1a3a2a"}}>{fmt(cost-ret)}</span>
                   </div>
                 </div>
               </div>
             );
           })}
+        </div>
+        {/* Footer Buttons */}
+        <div style={{padding:"14px 20px",borderTop:"2px solid #e8f5e9",display:"flex",gap:10}}>
+          <button onClick={handlePrint} style={{flex:1,padding:"11px",background:"#f0fdf4",border:"2px solid #16a34a",borderRadius:10,fontSize:13,fontWeight:600,color:"#15803d",cursor:"pointer"}}>🖨️ Drucken</button>
+          <button onClick={handleWhatsApp} style={{flex:1,padding:"11px",background:"#25d366",border:"none",borderRadius:10,fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>💬 WhatsApp</button>
+          <button onClick={onClose} style={{flex:1,padding:"11px",background:"#1a3a2a",border:"none",borderRadius:10,fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>✕ Schließen</button>
         </div>
       </div>
     </div>
