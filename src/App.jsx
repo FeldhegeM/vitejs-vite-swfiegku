@@ -202,17 +202,26 @@ function BillingModal({ drinks, persons, orders, returns, onClose }) {
 }
 
 // ─── Erfolgs-Modal ────────────────────────────────────────────────────────────
-function SuccessModal({ summary, onClose }) {
+function SuccessModal({ summary, onKeep, onClear }) {
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
       <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:480,boxShadow:"0 24px 80px rgba(0,0,0,0.25)",overflow:"hidden"}}>
         <div style={{background:"linear-gradient(135deg,#1a3a2a,#2d7a4f)",padding:"28px 24px",textAlign:"center"}}>
           <div style={{fontSize:52,marginBottom:8}}>🎉</div>
           <div style={{color:"#fff",fontSize:20,fontFamily:"Georgia,serif",fontWeight:700}}>Bestellung abgesendet!</div>
+          <div style={{color:"#c8e6c9",fontSize:13,marginTop:4}}>E-Mail wurde geöffnet – bitte absenden nicht vergessen.</div>
         </div>
         <div style={{padding:22}}>
-          <div style={{background:"#f0fdf4",borderRadius:10,padding:14,fontSize:12,fontFamily:"monospace",whiteSpace:"pre-wrap",color:"#1a3a2a",maxHeight:220,overflowY:"auto"}}>{summary}</div>
-          <button onClick={onClose} style={{marginTop:18,width:"100%",padding:14,background:"#1a3a2a",color:"#fff",border:"none",borderRadius:12,fontSize:16,fontWeight:700,cursor:"pointer"}}>✓ Neue Bestellrunde starten</button>
+          <div style={{background:"#f0fdf4",borderRadius:10,padding:14,fontSize:12,fontFamily:"monospace",whiteSpace:"pre-wrap",color:"#1a3a2a",maxHeight:180,overflowY:"auto",marginBottom:16}}>{summary}</div>
+          <div style={{display:"flex",gap:10}}>
+            <button onClick={onKeep} style={{flex:1,padding:13,background:"#f0fdf4",border:"2px solid #16a34a",borderRadius:12,fontSize:14,fontWeight:600,color:"#15803d",cursor:"pointer"}}>
+              📝 Bestellung behalten
+            </button>
+            <button onClick={onClear} style={{flex:1,padding:13,background:"#1a3a2a",color:"#fff",border:"none",borderRadius:12,fontSize:14,fontWeight:700,cursor:"pointer"}}>
+              🔄 Neue Bestellrunde
+            </button>
+          </div>
+          <div style={{fontSize:11,color:"#888",textAlign:"center",marginTop:8}}>„Behalten" lässt alle Mengen stehen · „Neue Runde" löscht alles</div>
         </div>
       </div>
     </div>
@@ -340,7 +349,8 @@ export default function App() {
     window.open(`mailto:${emails}?subject=${encodeURIComponent(`Getränke-Sammelbestellung ${new Date().toLocaleDateString("de-DE")}`)}&body=${encodeURIComponent(summary)}`);
     setSuccessSummary(summary);setShowSuccess(true);
   };
-  const handleSuccessClose = async () => { await sb.from("orders").delete().neq("id",0); setOrders({});setShowSuccess(false);setSelectedPerson(null); };
+  const handleSuccessKeep = () => { setShowSuccess(false); };
+  const handleSuccessClose = async () => { await sb.from("orders").delete().neq("id",0); await sb.from("returns").delete().neq("id",0); setOrders({});setReturns({});setShowSuccess(false);setSelectedPerson(null); };
   const handleAdminSave = async ({drinks:d,persons:p,dealerEmail:de,deliveryDate:dd,sendPassword:sp,adminPin:ap}) => {
     setDrinks(d);setPersons(p);setDealerEmail(de);setDeliveryDate(dd||"");setSendPassword(sp||SEND_PASSWORD);
     await sb.from("drinks").delete().neq("id",0); await sb.from("drinks").insert(d);
@@ -480,15 +490,16 @@ export default function App() {
               <>
                 {persons.map(p=>{
                   const pd=drinks.filter(d=>(orders[d.id]?.[p.id]||0)>0);
-                  if(!pd.length)return null;
+                  const rd=drinks.filter(d=>(returns[d.id]?.[p.id]||0)>0);
+                  if(!pd.length && !rd.length)return null;
                   const pTotal=pd.reduce((s,d)=>s+(parseInt(orders[d.id]?.[p.id])||0),0);
-                  const pGross=pd.reduce((s,d)=>s+(parseInt(orders[d.id]?.[p.id])||0)*((parseFloat(d.price)||0)+(parseFloat(d.deposit)||0)),0);
-                  const pDepositPaid=pd.reduce((s,d)=>s+(parseInt(orders[d.id]?.[p.id])||0)*(parseFloat(d.deposit)||0),0);
+                  const pEinkauf=pd.reduce((s,d)=>s+(parseInt(orders[d.id]?.[p.id])||0)*(parseFloat(d.price)||0),0);
+                  const pPfand=pd.reduce((s,d)=>s+(parseInt(orders[d.id]?.[p.id])||0)*(parseFloat(d.deposit)||0),0);
                   const pReturnAmt=drinks.reduce((s,d)=>s+(parseInt(returns[d.id]?.[p.id])||0)*(parseFloat(d.deposit)||0),0);
-                  const pNet=pGross-pReturnAmt;
+                  const pZahlen=pEinkauf+pPfand-pReturnAmt;
                   return (
-                    <div key={p.id} style={{marginBottom:14}}>
-                      <div style={{color:"#f0fdf4",fontSize:14,fontWeight:700,marginBottom:4,display:"flex",alignItems:"center",gap:8}}>
+                    <div key={p.id} style={{marginBottom:16,background:"rgba(255,255,255,0.04)",borderRadius:12,padding:"12px 14px"}}>
+                      <div style={{color:"#f0fdf4",fontSize:14,fontWeight:700,marginBottom:6,display:"flex",alignItems:"center",gap:8}}>
                         <span>👤</span>
                         <input value={p.name} onChange={e=>handlePersonNameChange(p.id,e.target.value)} onBlur={()=>savePersonName(p.id,p.name)}
                           style={{background:"none",border:"none",borderBottom:"1px dashed rgba(255,255,255,0.3)",color:"#f0fdf4",fontSize:14,fontWeight:700,outline:"none",cursor:"text",padding:"0 0 1px",minWidth:80}}/>
@@ -496,18 +507,36 @@ export default function App() {
                       </div>
                       {pd.map(d=>{
                         const q=parseInt(orders[d.id]?.[p.id])||0;
-                        const c=q*((parseFloat(d.price)||0)+(parseFloat(d.deposit)||0));
+                        const preis=q*(parseFloat(d.price)||0);
+                        const pfand=q*(parseFloat(d.deposit)||0);
                         return (
-                          <div key={d.id} style={{color:"#6ee7b7",fontSize:13,paddingLeft:18,lineHeight:1.8}}>
-                            {d.emoji} {d.name}: <strong style={{color:"#a7f3d0"}}>{q} Kasten</strong>
-                            <span style={{color:"#888",fontSize:11}}> · {fmt(c)}</span>
+                          <div key={d.id} style={{fontSize:12,paddingLeft:16,marginBottom:3,color:"#6ee7b7",display:"flex",justifyContent:"space-between"}}>
+                            <span>{d.emoji} {d.name} {q}×</span>
+                            <span style={{color:"#a7f3d0"}}>
+                              {fmt(preis)} <span style={{color:"#6ee7b7"}}>+ {fmt(pfand)} Pfand</span> = {fmt(preis+pfand)}
+                            </span>
                           </div>
                         );
                       })}
-                      <div style={{paddingLeft:18,marginTop:4,fontSize:12,color:"#a5d6a7"}}>
-                        Einkauf+Pfand: {fmt(pGross)}
-                        {pReturnAmt>0 && <span style={{color:"#4ade80"}}> · Pfandrückgabe: −{fmt(pReturnAmt)}</span>}
-                        <span style={{color:"#fde68a",fontWeight:700}}> · Zu zahlen: {fmt(pGross-pReturnAmt)}</span>
+                      {rd.length>0 && (
+                        <div style={{marginTop:6,paddingTop:6,borderTop:"1px dashed rgba(255,255,255,0.1)"}}>
+                          {rd.map(d=>{
+                            const q=parseInt(returns[d.id]?.[p.id])||0;
+                            const r=q*(parseFloat(d.deposit)||0);
+                            return (
+                              <div key={d.id} style={{fontSize:12,paddingLeft:16,marginBottom:3,display:"flex",justifyContent:"space-between",color:"#4ade80"}}>
+                                <span>♻️ {d.emoji} {d.name} {q}× Pfandrückgabe</span>
+                                <span>−{fmt(r)}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <div style={{marginTop:8,paddingTop:6,borderTop:"1px solid rgba(255,255,255,0.15)",display:"flex",justifyContent:"space-between",fontSize:13}}>
+                        <div style={{color:"rgba(255,255,255,0.5)",fontSize:11}}>
+                          Getränke {fmt(pEinkauf)} + Pfand {fmt(pPfand)}{pReturnAmt>0?` − Rückgabe ${fmt(pReturnAmt)}`:""}
+                        </div>
+                        <div style={{color:"#fde68a",fontWeight:700}}>{fmt(pZahlen)}</div>
                       </div>
                     </div>
                   );
@@ -580,7 +609,7 @@ export default function App() {
 
       {showAdmin && <AdminModal drinks={drinks} persons={persons} dealerEmail={dealerEmail} deliveryDate={deliveryDate} sendPassword={sendPassword} adminPin={adminPin} onSave={handleAdminSave} onClose={()=>setShowAdmin(false)}/>}
       {showBilling && <BillingModal drinks={drinks} persons={persons} orders={orders} returns={returns} onClose={()=>setShowBilling(false)}/>}
-      {showSuccess && <SuccessModal summary={successSummary} onClose={handleSuccessClose}/>}
+      {showSuccess && <SuccessModal summary={successSummary} onKeep={handleSuccessKeep} onClear={handleSuccessClose}/>}
     </div>
   );
 }
