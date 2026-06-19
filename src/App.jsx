@@ -144,36 +144,34 @@ function AdminModal({ drinks, persons, dealerEmail, deliveryDate, sendPassword, 
 function BillingModal({ drinks, persons, orders, returns, onClose }) {
 
   const buildBillingText = () => {
-    let lines = ["💶 ABRECHNUNG GETRÄNKE\n"];
-    lines.push("═".repeat(36));
+    let lines = ["ABRECHNUNG GETRAENKE\n"];
     persons.forEach(p => {
       const ordered = drinks.filter(d=>(orders[d.id]?.[p.id]||0)>0);
       const returned = drinks.filter(d=>(returns[d.id]?.[p.id]||0)>0);
       if(!ordered.length && !returned.length) return;
       let cost=0, ret=0;
-      lines.push(`\n👤 ${p.name}:`);
+      lines.push(`👤 ${p.name}:`);
       ordered.forEach(d=>{
         const q=parseInt(orders[d.id]?.[p.id])||0;
         const preis=q*(parseFloat(d.price)||0);
         const pfand=q*(parseFloat(d.deposit)||0);
         cost+=preis+pfand;
-        lines.push(`  ${d.emoji} ${d.name}: ${q}×`);
-        lines.push(`     Getränkepreis: ${q} × ${fmt(parseFloat(d.price))} = ${fmt(preis)}`);
-        lines.push(`     Pfand:         ${q} × ${fmt(parseFloat(d.deposit))} = ${fmt(pfand)}`);
+        lines.push(`  ${d.emoji} ${d.name}: ${q} Kasten`);
+        lines.push(`     Getraenkepreis: ${q} x ${fmt(parseFloat(d.price))} = ${fmt(preis)}`);
+        lines.push(`     Pfand:          ${q} x ${fmt(parseFloat(d.deposit))} = ${fmt(pfand)}`);
       });
       if(returned.length>0){
-        lines.push(`  ♻️ Pfandrückgabe:`);
+        lines.push(`  Pfandrueckgabe:`);
         returned.forEach(d=>{
           const q=parseInt(returns[d.id]?.[p.id])||0;
           const r=q*(parseFloat(d.deposit)||0);
           ret+=r;
-          lines.push(`    ${d.emoji} ${d.name}: ${q}× = −${fmt(r)}`);
+          lines.push(`    ${d.emoji} ${d.name}: ${q} x ${fmt(parseFloat(d.deposit))} = -${fmt(r)}`);
         });
       }
-      lines.push(`  ────────────────────────────`);
-      lines.push(`  → ZU ZAHLEN: ${fmt(cost-ret)}`);
+      lines.push(`  💰 ZU ZAHLEN: ${fmt(cost-ret)}`);
+      lines.push(``);
     });
-    lines.push("\n" + "═".repeat(36));
     return lines.join("\n");
   };
 
