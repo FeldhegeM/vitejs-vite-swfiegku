@@ -145,34 +145,49 @@ function BillingModal({ drinks, persons, orders, returns, onClose }) {
 
   const buildBillingText = () => {
     const ds = new Date().toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit",year:"numeric"});
-    let lines = [`Abrechnung Getraenke – ${ds}`, ``];
+    let lines = [
+      `Abrechnung Getraenke`,
+      `Datum: ${ds}`,
+      ``
+    ];
+    if(deliveryDate) lines.push(`Lieferung am: ${formatDate(deliveryDate)}`, ``);
+
     persons.forEach(p => {
       const ordered = drinks.filter(d=>(orders[d.id]?.[p.id]||0)>0);
       const returned = drinks.filter(d=>(returns[d.id]?.[p.id]||0)>0);
       if(!ordered.length && !returned.length) return;
       let cost=0, ret=0;
-      lines.push(`${p.name}:`);
+
+      lines.push(`----------------------------`);
+      lines.push(`${p.name}`);
+      lines.push(``);
+
       ordered.forEach(d=>{
         const q=parseInt(orders[d.id]?.[p.id])||0;
         const preis=q*(parseFloat(d.price)||0);
         const pfand=q*(parseFloat(d.deposit)||0);
         cost+=preis+pfand;
-        lines.push(`  ${d.name}: ${q}x`);
-        lines.push(`    Getraenk: ${q}x${fmt(parseFloat(d.price))} = ${fmt(preis)}`);
-        lines.push(`    Pfand: ${q}x${fmt(parseFloat(d.deposit))} = ${fmt(pfand)}`);
+        lines.push(`${d.name}: ${q} Kasten`);
+        lines.push(`  Getraenkepreis: ${q} x ${fmt(parseFloat(d.price))} = ${fmt(preis)}`);
+        lines.push(`  Pfand:          ${q} x ${fmt(parseFloat(d.deposit))} = ${fmt(pfand)}`);
+        lines.push(``);
       });
+
       if(returned.length>0){
-        lines.push(`  Pfandrueckgabe:`);
+        lines.push(`Pfandrueckgabe:`);
         returned.forEach(d=>{
           const q=parseInt(returns[d.id]?.[p.id])||0;
           const r=q*(parseFloat(d.deposit)||0);
           ret+=r;
-          lines.push(`    ${d.name}: ${q}x${fmt(parseFloat(d.deposit))} = -${fmt(r)}`);
+          lines.push(`  ${d.name}: ${q} x ${fmt(parseFloat(d.deposit))} = -${fmt(r)}`);
         });
+        lines.push(``);
       }
-      lines.push(`  >> Zu zahlen: ${fmt(cost-ret)}`);
+
+      lines.push(`ZU ZAHLEN: ${fmt(cost-ret)}`);
       lines.push(``);
     });
+
     return lines.join("\n");
   };
 
