@@ -141,71 +141,58 @@ function AdminModal({ drinks, persons, dealerEmail, deliveryDate, sendPassword, 
 }
 
 // ─── Abrechnungs-Modal ────────────────────────────────────────────────────────
-function BillingModal({ drinks, persons, orders, returns, deliveryDate, onClose }) {
+function BillingModal({ drinks, persons, orders, returns, onClose }) {
 
   const buildBillingText = () => {
     const ds = new Date().toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit",year:"numeric"});
-    let lines = [
-      `Abrechnung Getraenke`,
-      `Datum: ${ds}`,
-      ``
-    ];
-    if(deliveryDate) lines.push(`Lieferung am: ${formatDate(deliveryDate)}`, ``);
-
+    let lines = [`Abrechnung Getraenke – ${ds}`, ``];
     persons.forEach(p => {
       const ordered = drinks.filter(d=>(orders[d.id]?.[p.id]||0)>0);
       const returned = drinks.filter(d=>(returns[d.id]?.[p.id]||0)>0);
       if(!ordered.length && !returned.length) return;
       let cost=0, ret=0;
-
-      lines.push(`----------------------------`);
-      lines.push(`${p.name}`);
-      lines.push(``);
-
+      lines.push(`${p.name}:`);
       ordered.forEach(d=>{
         const q=parseInt(orders[d.id]?.[p.id])||0;
         const preis=q*(parseFloat(d.price)||0);
         const pfand=q*(parseFloat(d.deposit)||0);
         cost+=preis+pfand;
-        lines.push(`${d.name}: ${q} Kasten`);
-        lines.push(`  Getraenkepreis: ${q} x ${fmt(parseFloat(d.price))} = ${fmt(preis)}`);
-        lines.push(`  Pfand:          ${q} x ${fmt(parseFloat(d.deposit))} = ${fmt(pfand)}`);
-        lines.push(``);
+        lines.push(`  ${d.name}: ${q}x`);
+        lines.push(`    Getraenk: ${q}x${fmt(parseFloat(d.price))} = ${fmt(preis)}`);
+        lines.push(`    Pfand: ${q}x${fmt(parseFloat(d.deposit))} = ${fmt(pfand)}`);
       });
-
       if(returned.length>0){
-        lines.push(`Pfandrueckgabe:`);
+        lines.push(`  Pfandrueckgabe:`);
         returned.forEach(d=>{
           const q=parseInt(returns[d.id]?.[p.id])||0;
           const r=q*(parseFloat(d.deposit)||0);
           ret+=r;
-          lines.push(`  ${d.name}: ${q} x ${fmt(parseFloat(d.deposit))} = -${fmt(r)}`);
+          lines.push(`    ${d.name}: ${q}x${fmt(parseFloat(d.deposit))} = -${fmt(r)}`);
         });
-        lines.push(``);
       }
-
-      lines.push(`ZU ZAHLEN: ${fmt(cost-ret)}`);
+      lines.push(`  >> Zu zahlen: ${fmt(cost-ret)}`);
       lines.push(``);
     });
-
     return lines.join("\n");
   };
 
   const handlePrint = () => {
     const text = buildBillingText();
-    const w = window.open("", "_blank", "width=600,height=800");
-    if(w) {
-      w.document.write(`<!DOCTYPE html><html><head><title>Abrechnung</title><style>body{font-family:monospace;font-size:14px;padding:24px;white-space:pre-wrap;line-height:1.6;}</style></head><body>${text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</body></html>`);
-      w.document.close();
-      w.focus();
-      setTimeout(()=>w.print(), 500);
-    }
+    const win = window.open("","_blank");
+    win.document.write(`<html><head><title>Abrechnung</title><style>body{font-family:monospace;font-size:14px;padding:24px;white-space:pre-wrap;}</style></head><body>${text.replace(/&/g,"&amp;").replace(/</g,"&lt;")}</body></html>`);
+    win.document.close();
+    win.print();
   };
 
   const handleWhatsApp = () => {
     const text = buildBillingText();
-    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-    window.location.href = url;
+    if(navigator.clipboard){
+      navigator.clipboard.writeText(text).then(()=>{
+        alert("Text kopiert! Bitte in WhatsApp einfuegen.");
+      });
+    } else {
+      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`,"_blank");
+    }
   };
 
   return (
@@ -739,7 +726,7 @@ export default function App() {
       )}
 
       {showAdmin && <AdminModal drinks={drinks} persons={persons} dealerEmail={dealerEmail} deliveryDate={deliveryDate} sendPassword={sendPassword} adminPin={adminPin} onSave={handleAdminSave} onClose={()=>setShowAdmin(false)}/>}
-      {showBilling && <BillingModal drinks={drinks} persons={persons} orders={orders} returns={returns} deliveryDate={deliveryDate} onClose={()=>setShowBilling(false)}/>}
+      {showBilling && <BillingModal drinks={drinks} persons={persons} orders={orders} returns={returns} onClose={()=>setShowBilling(false)}/>}
       {showSuccess && <SuccessModal summary={successSummary} onKeep={handleSuccessKeep} onClear={handleSuccessClose}/>}
     </div>
   );
