@@ -141,71 +141,53 @@ function AdminModal({ drinks, persons, dealerEmail, deliveryDate, sendPassword, 
 }
 
 // ─── Abrechnungs-Modal ────────────────────────────────────────────────────────
-function BillingModal({ drinks, persons, orders, returns, deliveryDate, onClose }) {
+function BillingModal({ drinks, persons, orders, returns, onClose }) {
 
   const buildBillingText = () => {
-    const ds = new Date().toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit",year:"numeric"});
-    let lines = [
-      `Abrechnung Getraenke`,
-      `Datum: ${ds}`,
-      ``
-    ];
-    if(deliveryDate) lines.push(`Lieferung am: ${formatDate(deliveryDate)}`, ``);
-
+    let lines = ["💶 ABRECHNUNG GETRÄNKE\n"];
+    lines.push("═".repeat(36));
     persons.forEach(p => {
       const ordered = drinks.filter(d=>(orders[d.id]?.[p.id]||0)>0);
       const returned = drinks.filter(d=>(returns[d.id]?.[p.id]||0)>0);
       if(!ordered.length && !returned.length) return;
       let cost=0, ret=0;
-
-      lines.push(`----------------------------`);
-      lines.push(`${p.name}`);
-      lines.push(``);
-
+      lines.push(`\n👤 ${p.name}:`);
       ordered.forEach(d=>{
         const q=parseInt(orders[d.id]?.[p.id])||0;
         const preis=q*(parseFloat(d.price)||0);
         const pfand=q*(parseFloat(d.deposit)||0);
         cost+=preis+pfand;
-        lines.push(`${d.name}: ${q} Kasten`);
-        lines.push(`  Getraenkepreis: ${q} x ${fmt(parseFloat(d.price))} = ${fmt(preis)}`);
-        lines.push(`  Pfand:          ${q} x ${fmt(parseFloat(d.deposit))} = ${fmt(pfand)}`);
-        lines.push(``);
+        lines.push(`  ${d.emoji} ${d.name}: ${q}×`);
+        lines.push(`     Getränkepreis: ${q} × ${fmt(parseFloat(d.price))} = ${fmt(preis)}`);
+        lines.push(`     Pfand:         ${q} × ${fmt(parseFloat(d.deposit))} = ${fmt(pfand)}`);
       });
-
       if(returned.length>0){
-        lines.push(`Pfandrueckgabe:`);
+        lines.push(`  ♻️ Pfandrückgabe:`);
         returned.forEach(d=>{
           const q=parseInt(returns[d.id]?.[p.id])||0;
           const r=q*(parseFloat(d.deposit)||0);
           ret+=r;
-          lines.push(`  ${d.name}: ${q} x ${fmt(parseFloat(d.deposit))} = -${fmt(r)}`);
+          lines.push(`    ${d.emoji} ${d.name}: ${q}× = −${fmt(r)}`);
         });
-        lines.push(``);
       }
-
-      lines.push(`ZU ZAHLEN: ${fmt(cost-ret)}`);
-      lines.push(``);
+      lines.push(`  ────────────────────────────`);
+      lines.push(`  → ZU ZAHLEN: ${fmt(cost-ret)}`);
     });
-
+    lines.push("\n" + "═".repeat(36));
     return lines.join("\n");
   };
 
   const handlePrint = () => {
     const text = buildBillingText();
-    const w = window.open("", "_blank", "width=600,height=800");
-    if(w) {
-      w.document.write(`<!DOCTYPE html><html><head><title>Abrechnung</title><style>body{font-family:monospace;font-size:14px;padding:24px;white-space:pre-wrap;line-height:1.6;}</style></head><body>${text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</body></html>`);
-      w.document.close();
-      w.focus();
-      setTimeout(()=>w.print(), 500);
-    }
+    const win = window.open("","_blank");
+    win.document.write(`<html><head><title>Abrechnung</title><style>body{font-family:monospace;font-size:14px;padding:24px;white-space:pre-wrap;}</style></head><body>${text.replace(/&/g,"&amp;").replace(/</g,"&lt;")}</body></html>`);
+    win.document.close();
+    win.print();
   };
 
   const handleWhatsApp = () => {
     const text = buildBillingText();
-    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-    window.location.href = url;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`,"_blank");
   };
 
   return (
@@ -402,16 +384,12 @@ export default function App() {
 
   const buildSummary = () => {
     const ds = new Date().toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit",year:"numeric"});
-    let lines=[`🛒 GETRÄNKE-SAMMELBESTELLUNG`,`📅 ${ds}`];
-    if(deliveryDate){
-      lines.push(``);
-      lines.push(`📦 Lieferung am: ${formatDate(deliveryDate)}`);
-      lines.push(`⏰ Bestellschluss: ${formatDeadline(deliveryDate)}`);
-    }
+    let lines=[`🛒 GETRÄNKE-SAMMELBESTELLUNG – ${ds}\n`];
+    if(deliveryDate){lines.push(`📦 Lieferung am: ${formatDate(deliveryDate)}`);lines.push(`⏰ Bestellschluss: ${formatDeadline(deliveryDate)}`);}
+    lines.push("═".repeat(50));
 
-    lines.push(``);
-    lines.push(`📦 GESAMT ALLE KÄSTEN`);
-    lines.push(``);
+    // Gesamt nach Getränk
+    lines.push("\n📦 GESAMT PRO GETRÄNK:\n");
     let gesamtGetraenk=0, gesamtPfandGesamt=0;
     drinks.forEach(d=>{
       const t=getTotalOrdered(d.id);
@@ -419,33 +397,32 @@ export default function App() {
       const preisGes=t*(parseFloat(d.price)||0);
       const pfandGes=t*(parseFloat(d.deposit)||0);
       gesamtGetraenk+=preisGes; gesamtPfandGesamt+=pfandGes;
-      lines.push(`${d.emoji} ${d.name} - ${t} Kasten`);
-      lines.push(`   Getränk: ${t} x ${fmt(parseFloat(d.price))} = ${fmt(preisGes)}`);
-      lines.push(`   Pfand:   ${t} x ${fmt(parseFloat(d.deposit))} = ${fmt(pfandGes)}`);
-      lines.push(``);
+      lines.push(`  ${d.emoji} ${d.name}: ${t}×`);
+      lines.push(`     Getränkepreis: ${t} × ${fmt(parseFloat(d.price))} = ${fmt(preisGes)}`);
+      lines.push(`     Pfand:         ${t} × ${fmt(parseFloat(d.deposit))} = ${fmt(pfandGes)}`);
     });
-    lines.push(`Getränke: ${fmt(gesamtGetraenk)}`);
-    lines.push(`Pfand:    ${fmt(gesamtPfandGesamt)}`);
-    lines.push(`💰 Brutto: ${fmt(gesamtGetraenk+gesamtPfandGesamt)}`);
+    lines.push(`\n  Getränke gesamt: ${fmt(gesamtGetraenk)}`);
+    lines.push(`  Pfand gesamt:    ${fmt(gesamtPfandGesamt)}`);
+    lines.push(`  BRUTTO gesamt:   ${fmt(gesamtGetraenk+gesamtPfandGesamt)}`);
 
-    lines.push(``);
-    lines.push(`👥 PRO PERSON`);
+    // Pro Person
+    lines.push("\n\n" + "═".repeat(50));
+    lines.push("\n👥 PRO PERSON:\n");
     let gesamtRueckgabe=0;
     persons.forEach(p=>{
       const po=drinks.filter(d=>(orders[d.id]?.[p.id]||0)>0);
       const pr=drinks.filter(d=>(returns[d.id]?.[p.id]||0)>0);
       if(!po.length && !pr.length)return;
-      lines.push(``);
-      lines.push(`👤 ${p.name}`);
+      lines.push(`👤 ${p.name}:`);
       let pGetraenk=0, pPfand=0, pRueck=0;
       po.forEach(d=>{
         const q=parseInt(orders[d.id]?.[p.id])||0;
         const preis=q*(parseFloat(d.price)||0);
         const pfand=q*(parseFloat(d.deposit)||0);
         pGetraenk+=preis; pPfand+=pfand;
-        lines.push(`  ${d.emoji} ${d.name}: ${q} Kasten`);
-        lines.push(`     Getränk: ${q} x ${fmt(parseFloat(d.price))} = ${fmt(preis)}`);
-        lines.push(`     Pfand:   ${q} x ${fmt(parseFloat(d.deposit))} = ${fmt(pfand)}`);
+        lines.push(`  ${d.emoji} ${d.name}: ${q}×`);
+        lines.push(`     Getränkepreis: ${q} × ${fmt(parseFloat(d.price))} = ${fmt(preis)}`);
+        lines.push(`     Pfand:         ${q} × ${fmt(parseFloat(d.deposit))} = ${fmt(pfand)}`);
       });
       if(pr.length>0){
         lines.push(`  ♻️ Pfandrückgabe:`);
@@ -453,21 +430,19 @@ export default function App() {
           const q=parseInt(returns[d.id]?.[p.id])||0;
           const r=q*(parseFloat(d.deposit)||0);
           pRueck+=r; gesamtRueckgabe+=r;
-          lines.push(`     ${d.emoji} ${d.name}: ${q} x ${fmt(parseFloat(d.deposit))} = -${fmt(r)}`);
+          lines.push(`    ${d.emoji} ${d.name}: ${q}× = −${fmt(r)}`);
         });
       }
-      lines.push(`  Getränke: ${fmt(pGetraenk)}`);
-      lines.push(`  Pfand:    ${fmt(pPfand)}`);
-      if(pRueck>0) lines.push(`  Rückgabe: -${fmt(pRueck)}`);
-      lines.push(`  💰 Zu zahlen: ${fmt(pGetraenk+pPfand-pRueck)}`);
+      lines.push(`  ─────────────────────────────────`);
+      lines.push(`  Getränke: ${fmt(pGetraenk)}  Pfand: ${fmt(pPfand)}${pRueck>0?`  Rückgabe: −${fmt(pRueck)}`:""}`);
+      lines.push(`  → ZU ZAHLEN: ${fmt(pGetraenk+pPfand-pRueck)}`);
+      lines.push("");
     });
 
-    lines.push(``);
-    lines.push(`📦 Gesamt: ${grandTotal} Kästen`);
-    lines.push(`Getränke: ${fmt(gesamtGetraenk)}`);
-    lines.push(`Pfand:    ${fmt(gesamtPfandGesamt)}`);
-    if(gesamtRueckgabe>0) lines.push(`♻️ Rückgabe: -${fmt(gesamtRueckgabe)}`);
-    lines.push(`💰 NETTO ZU ZAHLEN: ${fmt(gesamtGetraenk+gesamtPfandGesamt-gesamtRueckgabe)}`);
+    lines.push("═".repeat(50));
+    lines.push(`\nGesamt: ${grandTotal} Kästen`);
+    lines.push(`Getränke: ${fmt(gesamtGetraenk)}  Pfand: ${fmt(gesamtPfandGesamt)}  Rückgabe: −${fmt(gesamtRueckgabe)}`);
+    lines.push(`NETTO ZU ZAHLEN: ${fmt(gesamtGetraenk+gesamtPfandGesamt-gesamtRueckgabe)}`);
     return lines.join("\n");
   };
 
@@ -739,9 +714,8 @@ export default function App() {
       )}
 
       {showAdmin && <AdminModal drinks={drinks} persons={persons} dealerEmail={dealerEmail} deliveryDate={deliveryDate} sendPassword={sendPassword} adminPin={adminPin} onSave={handleAdminSave} onClose={()=>setShowAdmin(false)}/>}
-      {showBilling && <BillingModal drinks={drinks} persons={persons} orders={orders} returns={returns} deliveryDate={deliveryDate} onClose={()=>setShowBilling(false)}/>}
+      {showBilling && <BillingModal drinks={drinks} persons={persons} orders={orders} returns={returns} onClose={()=>setShowBilling(false)}/>}
       {showSuccess && <SuccessModal summary={successSummary} onKeep={handleSuccessKeep} onClear={handleSuccessClose}/>}
     </div>
   );
 }
-
