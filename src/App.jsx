@@ -144,21 +144,22 @@ function AdminModal({ drinks, persons, dealerEmail, deliveryDate, sendPassword, 
 function BillingModal({ drinks, persons, orders, returns, onClose }) {
 
   const buildBillingText = () => {
-    let lines = ["ABRECHNUNG GETRAENKE\n"];
+    const ds = new Date().toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit",year:"numeric"});
+    let lines = [`Abrechnung Getraenke – ${ds}`, ``];
     persons.forEach(p => {
       const ordered = drinks.filter(d=>(orders[d.id]?.[p.id]||0)>0);
       const returned = drinks.filter(d=>(returns[d.id]?.[p.id]||0)>0);
       if(!ordered.length && !returned.length) return;
       let cost=0, ret=0;
-      lines.push(`👤 ${p.name}:`);
+      lines.push(`${p.name}:`);
       ordered.forEach(d=>{
         const q=parseInt(orders[d.id]?.[p.id])||0;
         const preis=q*(parseFloat(d.price)||0);
         const pfand=q*(parseFloat(d.deposit)||0);
         cost+=preis+pfand;
-        lines.push(`  ${d.emoji} ${d.name}: ${q} Kasten`);
-        lines.push(`     Getraenkepreis: ${q} x ${fmt(parseFloat(d.price))} = ${fmt(preis)}`);
-        lines.push(`     Pfand:          ${q} x ${fmt(parseFloat(d.deposit))} = ${fmt(pfand)}`);
+        lines.push(`  ${d.name}: ${q}x`);
+        lines.push(`    Getraenk: ${q}x${fmt(parseFloat(d.price))} = ${fmt(preis)}`);
+        lines.push(`    Pfand: ${q}x${fmt(parseFloat(d.deposit))} = ${fmt(pfand)}`);
       });
       if(returned.length>0){
         lines.push(`  Pfandrueckgabe:`);
@@ -166,10 +167,10 @@ function BillingModal({ drinks, persons, orders, returns, onClose }) {
           const q=parseInt(returns[d.id]?.[p.id])||0;
           const r=q*(parseFloat(d.deposit)||0);
           ret+=r;
-          lines.push(`    ${d.emoji} ${d.name}: ${q} x ${fmt(parseFloat(d.deposit))} = -${fmt(r)}`);
+          lines.push(`    ${d.name}: ${q}x${fmt(parseFloat(d.deposit))} = -${fmt(r)}`);
         });
       }
-      lines.push(`  💰 ZU ZAHLEN: ${fmt(cost-ret)}`);
+      lines.push(`  >> Zu zahlen: ${fmt(cost-ret)}`);
       lines.push(``);
     });
     return lines.join("\n");
@@ -185,7 +186,13 @@ function BillingModal({ drinks, persons, orders, returns, onClose }) {
 
   const handleWhatsApp = () => {
     const text = buildBillingText();
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`,"_blank");
+    if(navigator.clipboard){
+      navigator.clipboard.writeText(text).then(()=>{
+        alert("Text kopiert! Bitte in WhatsApp einfuegen.");
+      });
+    } else {
+      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`,"_blank");
+    }
   };
 
   return (
