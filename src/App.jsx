@@ -141,7 +141,7 @@ function AdminModal({ drinks, persons, dealerEmail, deliveryDate, sendPassword, 
 }
 
 // ─── Abrechnungs-Modal ────────────────────────────────────────────────────────
-function BillingModal({ drinks, persons, orders, returns, onClose }) {
+function BillingModal({ drinks, persons, orders, returns, deliveryDate, onClose }) {
 
   const buildBillingText = () => {
     const ds = new Date().toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit",year:"numeric"});
@@ -193,21 +193,19 @@ function BillingModal({ drinks, persons, orders, returns, onClose }) {
 
   const handlePrint = () => {
     const text = buildBillingText();
-    const win = window.open("","_blank");
-    win.document.write(`<html><head><title>Abrechnung</title><style>body{font-family:monospace;font-size:14px;padding:24px;white-space:pre-wrap;}</style></head><body>${text.replace(/&/g,"&amp;").replace(/</g,"&lt;")}</body></html>`);
-    win.document.close();
-    win.print();
+    const w = window.open("", "_blank", "width=600,height=800");
+    if(w) {
+      w.document.write(`<!DOCTYPE html><html><head><title>Abrechnung</title><style>body{font-family:monospace;font-size:14px;padding:24px;white-space:pre-wrap;line-height:1.6;}</style></head><body>${text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</body></html>`);
+      w.document.close();
+      w.focus();
+      setTimeout(()=>w.print(), 500);
+    }
   };
 
   const handleWhatsApp = () => {
     const text = buildBillingText();
-    if(navigator.clipboard){
-      navigator.clipboard.writeText(text).then(()=>{
-        alert("Text kopiert! Bitte in WhatsApp einfuegen.");
-      });
-    } else {
-      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`,"_blank");
-    }
+    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.location.href = url;
   };
 
   return (
@@ -741,7 +739,7 @@ export default function App() {
       )}
 
       {showAdmin && <AdminModal drinks={drinks} persons={persons} dealerEmail={dealerEmail} deliveryDate={deliveryDate} sendPassword={sendPassword} adminPin={adminPin} onSave={handleAdminSave} onClose={()=>setShowAdmin(false)}/>}
-      {showBilling && <BillingModal drinks={drinks} persons={persons} orders={orders} returns={returns} onClose={()=>setShowBilling(false)}/>}
+      {showBilling && <BillingModal drinks={drinks} persons={persons} orders={orders} returns={returns} deliveryDate={deliveryDate} onClose={()=>setShowBilling(false)}/>}
       {showSuccess && <SuccessModal summary={successSummary} onKeep={handleSuccessKeep} onClear={handleSuccessClose}/>}
     </div>
   );
