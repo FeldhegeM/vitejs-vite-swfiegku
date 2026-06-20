@@ -160,12 +160,17 @@ function BillingModal({ drinks, persons, orders, returns, leergut, deliveryDate,
     let lines = [`Abrechnung Getraenke`, `Datum: ${ds}`, ``];
     if(deliveryDate) lines.push(`Lieferung am: ${formatDate(deliveryDate)}`, ``);
 
+    const activePersons = persons.filter(p=>drinks.some(d=>(orders[d.id]?.[p.id]||0)>0));
+    const deliveryCost = activePersons.length > 0 ? 10 / activePersons.length : 0;
+
     persons.forEach(p => {
       const ordered = drinks.filter(d=>(orders[d.id]?.[p.id]||0)>0);
       const returned = drinks.filter(d=>(returns[d.id]?.[p.id]||0)>0);
       const lg = LEERGUT_TYPES.filter(l=>(leergut[p.id]?.[l.id]||0)>0);
-      if(!ordered.length && !returned.length && !lg.length) return;
+      const isActive = ordered.length > 0;
+      if(!isActive && !lg.length) return;
       let cost=0, ret=0, lgCost=0;
+      const myDelivery = isActive ? deliveryCost : 0;
 
       lines.push(`----------------------------`);
       lines.push(`${p.name}`);
@@ -204,7 +209,8 @@ function BillingModal({ drinks, persons, orders, returns, leergut, deliveryDate,
         lines.push(``);
       }
 
-      lines.push(`ZU ZAHLEN: ${fmt(cost-ret-lgCost)}`);
+      if(isActive) lines.push(`Lieferkosten (10,00 € / ${activePersons.length} Besteller): ${fmt(myDelivery)}`);
+      lines.push(`ZU ZAHLEN: ${fmt(cost-ret-lgCost+myDelivery)}`);
       lines.push(``);
     });
     return lines.join("\n");
@@ -235,15 +241,20 @@ function BillingModal({ drinks, persons, orders, returns, leergut, deliveryDate,
           <button onClick={onClose} style={{background:"none",border:"none",color:"#c8e6c9",fontSize:22,cursor:"pointer"}}>✕</button>
         </div>
         <div style={{padding:20,overflowY:"auto",flex:1}}>
-          {persons.map(p=>{
+          {(()=>{
+            const activePersons = persons.filter(p=>drinks.some(d=>(orders[d.id]?.[p.id]||0)>0));
+            const deliveryCost = activePersons.length > 0 ? 10 / activePersons.length : 0;
+            return persons.map(p=>{
             const ordered = drinks.filter(d=>(orders[d.id]?.[p.id]||0)>0);
             const returned = drinks.filter(d=>(returns[d.id]?.[p.id]||0)>0);
-            if(ordered.length===0 && returned.length===0 && !LEERGUT_TYPES.some(l=>(leergut[p.id]?.[l.id]||0)>0)) return null;
+            const isActive = ordered.length > 0;
+            if(!isActive && !LEERGUT_TYPES.some(l=>(leergut[p.id]?.[l.id]||0)>0)) return null;
             let cost=0, ret=0;
             ordered.forEach(d=>{ const q=parseInt(orders[d.id]?.[p.id])||0; cost+=q*((parseFloat(d.price)||0)+(parseFloat(d.deposit)||0)); });
             returned.forEach(d=>{ const q=parseInt(returns[d.id]?.[p.id])||0; ret+=q*(parseFloat(d.deposit)||0); });
             const lg = LEERGUT_TYPES.filter(l=>(leergut[p.id]?.[l.id]||0)>0);
             let lgCost=0; lg.forEach(l=>{ lgCost+=(parseInt(leergut[p.id]?.[l.id])||0)*l.price; });
+            const myDelivery = isActive ? deliveryCost : 0;
             return (
               <div key={p.id} style={{marginBottom:20,background:"#f0fdf4",borderRadius:14,overflow:"hidden"}}>
                 <div style={{background:"#1a3a2a",padding:"10px 16px"}}><span style={{color:"#fff",fontWeight:700,fontSize:14}}>👤 {p.name}</span></div>
@@ -296,14 +307,22 @@ function BillingModal({ drinks, persons, orders, returns, leergut, deliveryDate,
                       })}
                     </div>
                   )}
+                  {isActive && (
+                    <div style={{marginTop:8,paddingTop:8,borderTop:"1px dashed #ccc"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#666"}}>
+                        <span>🚚 Lieferkosten (10,00 € ÷ {activePersons.length} Besteller)</span>
+                        <span>{fmt(myDelivery)}</span>
+                      </div>
+                    </div>
+                  )}
                   <div style={{borderTop:"2px solid #1a3a2a",marginTop:10,paddingTop:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <span style={{fontSize:14,fontWeight:700,color:"#1a3a2a"}}>Zu zahlen</span>
-                    <span style={{fontSize:22,fontWeight:700,color:"#1a3a2a"}}>{fmt(cost-ret-lgCost)}</span>
+                    <span style={{fontSize:22,fontWeight:700,color:"#1a3a2a"}}>{fmt(cost-ret-lgCost+myDelivery)}</span>
                   </div>
                 </div>
               </div>
             );
-          })}
+          });})()}
         </div>
         {/* Footer Buttons */}
         <div style={{padding:"14px 20px",borderTop:"2px solid #e8f5e9",display:"flex",gap:10}}>
