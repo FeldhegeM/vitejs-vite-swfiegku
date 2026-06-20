@@ -228,7 +228,6 @@ function BillingModal({ drinks, persons, orders, returns, leergut, deliveryDate,
     lines.push(`Lieferkosten gesamt:        ${fmt(gesamtLieferkosten)}`);
     lines.push(``);
     lines.push(`GESAMT ZU ZAHLEN: ${fmt(gesamtGetraenke+gesamtLeergut-gesamtRueckgabe+gesamtLieferkosten)}`);
-    });
     return lines.join("\n");
   };
 
