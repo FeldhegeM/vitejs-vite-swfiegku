@@ -25,7 +25,19 @@ const DEFAULT_PERSONS = [
 ];
 const SEND_PASSWORD = "bestellen";
 const ADMIN_PIN_DEFAULT = "1234";
+const SPECIAL_PW = "Bermestrasse";
 const fmt = (n) => Number(n).toFixed(2).replace(".",",") + " €";
+
+const LEERGUT_TYPES = [
+  { id:"lg1", name:"6er Glas / PET", price:2.40 },
+  { id:"lg2", name:"6er PET / 10er Cola, Apolli", price:3.00 },
+  { id:"lg3", name:"20er Bier", price:3.10 },
+  { id:"lg4", name:"12er Glas / PET", price:3.30 },
+  { id:"lg5", name:"24er Bier", price:3.42 },
+  { id:"lg6", name:"12er Schwarz / 20er Potts", price:4.50 },
+  { id:"lg7", name:"24er Glas", price:5.10 },
+  { id:"lg8", name:"20er PET", price:6.50 },
+];
 
 function formatDate(s) { if(!s) return "–"; const [y,m,d]=s.split("-"); return `${d}.${m}.${y}`; }
 function deadlineDate(s) { if(!s) return null; const d=new Date(s); d.setDate(d.getDate()-3); return d; }
@@ -141,53 +153,78 @@ function AdminModal({ drinks, persons, dealerEmail, deliveryDate, sendPassword, 
 }
 
 // ─── Abrechnungs-Modal ────────────────────────────────────────────────────────
-function BillingModal({ drinks, persons, orders, returns, onClose }) {
+function BillingModal({ drinks, persons, orders, returns, leergut, deliveryDate, onClose }) {
 
   const buildBillingText = () => {
-    let lines = ["💶 ABRECHNUNG GETRÄNKE\n"];
-    lines.push("═".repeat(36));
+    const ds = new Date().toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit",year:"numeric"});
+    let lines = [`Abrechnung Getraenke`, `Datum: ${ds}`, ``];
+    if(deliveryDate) lines.push(`Lieferung am: ${formatDate(deliveryDate)}`, ``);
+
     persons.forEach(p => {
       const ordered = drinks.filter(d=>(orders[d.id]?.[p.id]||0)>0);
       const returned = drinks.filter(d=>(returns[d.id]?.[p.id]||0)>0);
-      if(!ordered.length && !returned.length) return;
-      let cost=0, ret=0;
-      lines.push(`\n👤 ${p.name}:`);
+      const lg = LEERGUT_TYPES.filter(l=>(leergut[p.id]?.[l.id]||0)>0);
+      if(!ordered.length && !returned.length && !lg.length) return;
+      let cost=0, ret=0, lgCost=0;
+
+      lines.push(`----------------------------`);
+      lines.push(`${p.name}`);
+      lines.push(``);
+
       ordered.forEach(d=>{
         const q=parseInt(orders[d.id]?.[p.id])||0;
         const preis=q*(parseFloat(d.price)||0);
         const pfand=q*(parseFloat(d.deposit)||0);
         cost+=preis+pfand;
-        lines.push(`  ${d.emoji} ${d.name}: ${q}×`);
-        lines.push(`     Getränkepreis: ${q} × ${fmt(parseFloat(d.price))} = ${fmt(preis)}`);
-        lines.push(`     Pfand:         ${q} × ${fmt(parseFloat(d.deposit))} = ${fmt(pfand)}`);
+        lines.push(`${d.name}: ${q} Kasten`);
+        lines.push(`  Getraenkepreis: ${q} x ${fmt(parseFloat(d.price))} = ${fmt(preis)}`);
+        lines.push(`  Pfand:          ${q} x ${fmt(parseFloat(d.deposit))} = ${fmt(pfand)}`);
+        lines.push(``);
       });
+
       if(returned.length>0){
-        lines.push(`  ♻️ Pfandrückgabe:`);
+        lines.push(`Pfandrueckgabe:`);
         returned.forEach(d=>{
           const q=parseInt(returns[d.id]?.[p.id])||0;
           const r=q*(parseFloat(d.deposit)||0);
           ret+=r;
-          lines.push(`    ${d.emoji} ${d.name}: ${q}× = −${fmt(r)}`);
+          lines.push(`  ${d.name}: ${q} x ${fmt(parseFloat(d.deposit))} = -${fmt(r)}`);
         });
+        lines.push(``);
       }
-      lines.push(`  ────────────────────────────`);
-      lines.push(`  → ZU ZAHLEN: ${fmt(cost-ret)}`);
+
+      if(lg.length>0){
+        lines.push(`Leergut:`);
+        lg.forEach(l=>{
+          const q=parseInt(leergut[p.id]?.[l.id])||0;
+          const r=q*l.price;
+          lgCost+=r;
+          lines.push(`  ${l.name}: ${q} x ${fmt(l.price)} = -${fmt(r)}`);
+        });
+        lines.push(``);
+      }
+
+      lines.push(`ZU ZAHLEN: ${fmt(cost-ret-lgCost)}`);
+      lines.push(``);
     });
-    lines.push("\n" + "═".repeat(36));
     return lines.join("\n");
   };
 
   const handlePrint = () => {
     const text = buildBillingText();
-    const win = window.open("","_blank");
-    win.document.write(`<html><head><title>Abrechnung</title><style>body{font-family:monospace;font-size:14px;padding:24px;white-space:pre-wrap;}</style></head><body>${text.replace(/&/g,"&amp;").replace(/</g,"&lt;")}</body></html>`);
-    win.document.close();
-    win.print();
+    const w = window.open("", "_blank", "width=600,height=800");
+    if(w) {
+      w.document.write(`<!DOCTYPE html><html><head><title>Abrechnung</title><style>body{font-family:monospace;font-size:14px;padding:24px;white-space:pre-wrap;line-height:1.6;}</style></head><body>${text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</body></html>`);
+      w.document.close();
+      w.focus();
+      setTimeout(()=>w.print(), 500);
+    }
   };
 
   const handleWhatsApp = () => {
     const text = buildBillingText();
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`,"_blank");
+    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.location.href = url;
   };
 
   return (
@@ -201,10 +238,12 @@ function BillingModal({ drinks, persons, orders, returns, onClose }) {
           {persons.map(p=>{
             const ordered = drinks.filter(d=>(orders[d.id]?.[p.id]||0)>0);
             const returned = drinks.filter(d=>(returns[d.id]?.[p.id]||0)>0);
-            if(ordered.length===0 && returned.length===0) return null;
+            if(ordered.length===0 && returned.length===0 && !LEERGUT_TYPES.some(l=>(leergut[p.id]?.[l.id]||0)>0)) return null;
             let cost=0, ret=0;
             ordered.forEach(d=>{ const q=parseInt(orders[d.id]?.[p.id])||0; cost+=q*((parseFloat(d.price)||0)+(parseFloat(d.deposit)||0)); });
             returned.forEach(d=>{ const q=parseInt(returns[d.id]?.[p.id])||0; ret+=q*(parseFloat(d.deposit)||0); });
+            const lg = LEERGUT_TYPES.filter(l=>(leergut[p.id]?.[l.id]||0)>0);
+            let lgCost=0; lg.forEach(l=>{ lgCost+=(parseInt(leergut[p.id]?.[l.id])||0)*l.price; });
             return (
               <div key={p.id} style={{marginBottom:20,background:"#f0fdf4",borderRadius:14,overflow:"hidden"}}>
                 <div style={{background:"#1a3a2a",padding:"10px 16px"}}><span style={{color:"#fff",fontWeight:700,fontSize:14}}>👤 {p.name}</span></div>
@@ -242,9 +281,24 @@ function BillingModal({ drinks, persons, orders, returns, onClose }) {
                       })}
                     </div>
                   )}
+                  {lg.length>0 && (
+                    <div style={{marginTop:8,paddingTop:8,borderTop:"1px dashed #ccc"}}>
+                      <div style={{fontSize:12,color:"#666",marginBottom:5}}>📦 Leergut:</div>
+                      {lg.map(l=>{
+                        const q=parseInt(leergut[p.id]?.[l.id])||0;
+                        const r=q*l.price;
+                        return (
+                          <div key={l.id} style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4,color:"#2563eb"}}>
+                            <span>{l.name}: {q} × {fmt(l.price)}</span>
+                            <span>−{fmt(r)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                   <div style={{borderTop:"2px solid #1a3a2a",marginTop:10,paddingTop:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <span style={{fontSize:14,fontWeight:700,color:"#1a3a2a"}}>Zu zahlen</span>
-                    <span style={{fontSize:22,fontWeight:700,color:"#1a3a2a"}}>{fmt(cost-ret)}</span>
+                    <span style={{fontSize:22,fontWeight:700,color:"#1a3a2a"}}>{fmt(cost-ret-lgCost)}</span>
                   </div>
                 </div>
               </div>
@@ -299,6 +353,12 @@ export default function App() {
   const [adminPin, setAdminPin] = useState(ADMIN_PIN_DEFAULT);
   const [orders, setOrders] = useState({});
   const [returns, setReturns] = useState({});
+  const [leergut, setLeergut] = useState({}); // { personId: { lgId: qty } }
+  const [specialWishes, setSpecialWishes] = useState({}); // { personId: text }
+  const [showSpecialPw, setShowSpecialPw] = useState(false);
+  const [specialPwInput, setSpecialPwInput] = useState("");
+  const [specialPwError, setSpecialPwError] = useState(false);
+  const [specialUnlocked, setSpecialUnlocked] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [activeTab, setActiveTab] = useState("order");
   const [showAdmin, setShowAdmin] = useState(false);
@@ -331,7 +391,7 @@ export default function App() {
     setLoading(true);
     try {
       const {data:cfg} = await sb.from("config").select("*");
-      if(cfg){ const c=Object.fromEntries(cfg.map(r=>[r.key,r.value])); if(c.delivery_date)setDeliveryDate(c.delivery_date); if(c.dealer_email)setDealerEmail(c.dealer_email); if(c.send_password)setSendPassword(c.send_password); if(c.admin_pin)setAdminPin(c.admin_pin); }
+      if(cfg){ const c=Object.fromEntries(cfg.map(r=>[r.key,r.value])); if(c.delivery_date)setDeliveryDate(c.delivery_date); if(c.dealer_email)setDealerEmail(c.dealer_email); if(c.send_password)setSendPassword(c.send_password); if(c.admin_pin)setAdminPin(c.admin_pin); if(c.special_wishes)setSpecialWishes(JSON.parse(c.special_wishes)); if(c.leergut)setLeergut(JSON.parse(c.leergut)); }
       const {data:dd} = await sb.from("drinks").select("*").order("id");
       if(dd&&dd.length>0)setDrinks(dd); else await sb.from("drinks").upsert(DEFAULT_DRINKS);
       const {data:pd} = await sb.from("persons").select("*").order("id");
@@ -345,6 +405,24 @@ export default function App() {
   };
 
   const saveConfig = async (key,value) => { await sb.from("config").upsert({key,value}); };
+
+  const handleSpecialWishChange = async (text) => {
+    if(!selectedPerson) return;
+    const updated = {...specialWishes, [selectedPerson]: text};
+    setSpecialWishes(updated);
+    await sb.from("config").upsert({key:"special_wishes", value:JSON.stringify(updated)});
+  };
+
+  const handleLeergutChange = async (lgId, qty) => {
+    if(!selectedPerson) return;
+    const parsed = Math.max(0, parseInt(qty)||0);
+    const updated = {...leergut, [selectedPerson]: {...(leergut[selectedPerson]||{}), [lgId]: parsed}};
+    setLeergut(updated);
+    await sb.from("config").upsert({key:"leergut", value:JSON.stringify(updated)});
+  };
+
+  const getLeergutQty = (lgId) => !selectedPerson ? "" : (leergut[selectedPerson]?.[lgId] || "");
+  const getTotalLeergutForType = (lgId) => Object.values(leergut).reduce((s,pObj)=>s+(parseInt(pObj?.[lgId])||0),0);
 
   const handleQtyChange = async (drinkId, qty) => {
     if(!selectedPerson) return;
@@ -384,65 +462,49 @@ export default function App() {
 
   const buildSummary = () => {
     const ds = new Date().toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit",year:"numeric"});
-    let lines=[`🛒 GETRÄNKE-SAMMELBESTELLUNG – ${ds}\n`];
-    if(deliveryDate){lines.push(`📦 Lieferung am: ${formatDate(deliveryDate)}`);lines.push(`⏰ Bestellschluss: ${formatDeadline(deliveryDate)}`);}
-    lines.push("═".repeat(50));
+    let lines = [
+      `GETRAENKE-SAMMELBESTELLUNG`,
+      `Datum: ${ds}`,
+    ];
+    if(deliveryDate){
+      lines.push(`Lieferung am: ${formatDate(deliveryDate)}`);
+      lines.push(`Bestellschluss: ${formatDeadline(deliveryDate)}`);
+    }
+    lines.push(``);
+    lines.push(`============================`);
+    lines.push(`BESTELLUNGEN PRO NACHBAR`);
+    lines.push(`============================`);
 
-    // Gesamt nach Getränk
-    lines.push("\n📦 GESAMT PRO GETRÄNK:\n");
-    let gesamtGetraenk=0, gesamtPfandGesamt=0;
-    drinks.forEach(d=>{
-      const t=getTotalOrdered(d.id);
-      if(t===0)return;
-      const preisGes=t*(parseFloat(d.price)||0);
-      const pfandGes=t*(parseFloat(d.deposit)||0);
-      gesamtGetraenk+=preisGes; gesamtPfandGesamt+=pfandGes;
-      lines.push(`  ${d.emoji} ${d.name}: ${t}×`);
-      lines.push(`     Getränkepreis: ${t} × ${fmt(parseFloat(d.price))} = ${fmt(preisGes)}`);
-      lines.push(`     Pfand:         ${t} × ${fmt(parseFloat(d.deposit))} = ${fmt(pfandGes)}`);
-    });
-    lines.push(`\n  Getränke gesamt: ${fmt(gesamtGetraenk)}`);
-    lines.push(`  Pfand gesamt:    ${fmt(gesamtPfandGesamt)}`);
-    lines.push(`  BRUTTO gesamt:   ${fmt(gesamtGetraenk+gesamtPfandGesamt)}`);
-
-    // Pro Person
-    lines.push("\n\n" + "═".repeat(50));
-    lines.push("\n👥 PRO PERSON:\n");
-    let gesamtRueckgabe=0;
     persons.forEach(p=>{
       const po=drinks.filter(d=>(orders[d.id]?.[p.id]||0)>0);
-      const pr=drinks.filter(d=>(returns[d.id]?.[p.id]||0)>0);
-      if(!po.length && !pr.length)return;
-      lines.push(`👤 ${p.name}:`);
-      let pGetraenk=0, pPfand=0, pRueck=0;
+      if(!po.length && !specialWishes[p.id]) return;
+      lines.push(``);
+      lines.push(`>> ${p.name} <<`);
+      lines.push(`----------------------------`);
       po.forEach(d=>{
         const q=parseInt(orders[d.id]?.[p.id])||0;
-        const preis=q*(parseFloat(d.price)||0);
-        const pfand=q*(parseFloat(d.deposit)||0);
-        pGetraenk+=preis; pPfand+=pfand;
-        lines.push(`  ${d.emoji} ${d.name}: ${q}×`);
-        lines.push(`     Getränkepreis: ${q} × ${fmt(parseFloat(d.price))} = ${fmt(preis)}`);
-        lines.push(`     Pfand:         ${q} × ${fmt(parseFloat(d.deposit))} = ${fmt(pfand)}`);
+        lines.push(`  ${d.name}: ${q} Kasten`);
       });
-      if(pr.length>0){
-        lines.push(`  ♻️ Pfandrückgabe:`);
-        pr.forEach(d=>{
-          const q=parseInt(returns[d.id]?.[p.id])||0;
-          const r=q*(parseFloat(d.deposit)||0);
-          pRueck+=r; gesamtRueckgabe+=r;
-          lines.push(`    ${d.emoji} ${d.name}: ${q}× = −${fmt(r)}`);
-        });
-      }
-      lines.push(`  ─────────────────────────────────`);
-      lines.push(`  Getränke: ${fmt(pGetraenk)}  Pfand: ${fmt(pPfand)}${pRueck>0?`  Rückgabe: −${fmt(pRueck)}`:""}`);
-      lines.push(`  → ZU ZAHLEN: ${fmt(pGetraenk+pPfand-pRueck)}`);
-      lines.push("");
+      if(specialWishes[p.id]) lines.push(`  Sonderwunsch: ${specialWishes[p.id]} (Preis auf Anfrage)`);
     });
 
-    lines.push("═".repeat(50));
-    lines.push(`\nGesamt: ${grandTotal} Kästen`);
-    lines.push(`Getränke: ${fmt(gesamtGetraenk)}  Pfand: ${fmt(gesamtPfandGesamt)}  Rückgabe: −${fmt(gesamtRueckgabe)}`);
-    lines.push(`NETTO ZU ZAHLEN: ${fmt(gesamtGetraenk+gesamtPfandGesamt-gesamtRueckgabe)}`);
+    lines.push(``);
+    lines.push(`============================`);
+    lines.push(`GESAMTLISTE FUER HAENDLER`);
+    lines.push(`============================`);
+    lines.push(``);
+    drinks.forEach(d=>{
+      const t=getTotalOrdered(d.id);
+      if(t>0) lines.push(`${d.name}: ${t} Kasten`);
+    });
+    const anySpecial = persons.filter(p=>specialWishes[p.id]);
+    if(anySpecial.length>0){
+      lines.push(``);
+      lines.push(`Sonderwuensche:`);
+      anySpecial.forEach(p=>lines.push(`  ${p.name}: ${specialWishes[p.id]}`));
+    }
+    lines.push(``);
+    lines.push(`Gesamt: ${grandTotal} Kaesten`);
     return lines.join("\n");
   };
 
@@ -456,7 +518,7 @@ export default function App() {
     setSuccessSummary(summary);setShowSuccess(true);
   };
   const handleSuccessKeep = () => { setShowSuccess(false); };
-  const handleSuccessClose = async () => { await sb.from("orders").delete().neq("id",0); await sb.from("returns").delete().neq("id",0); setOrders({});setReturns({});setShowSuccess(false);setSelectedPerson(null); };
+  const handleSuccessClose = async () => { await sb.from("orders").delete().neq("id",0); await sb.from("returns").delete().neq("id",0); setOrders({});setReturns({});setSpecialWishes({});setLeergut({});setShowSuccess(false);setSelectedPerson(null); await sb.from("config").upsert({key:"special_wishes",value:"{}"});await sb.from("config").upsert({key:"leergut",value:"{}"}); };
   const handleAdminSave = async ({drinks:d,persons:p,dealerEmail:de,deliveryDate:dd,sendPassword:sp,adminPin:ap}) => {
     setDrinks(d);setPersons(p);setDealerEmail(de);setDeliveryDate(dd||"");setSendPassword(sp||SEND_PASSWORD);
     await sb.from("drinks").delete().neq("id",0); await sb.from("drinks").insert(d);
@@ -531,14 +593,36 @@ export default function App() {
         </div>
 
         {/* Tabs */}
-        <div style={{display:"flex",gap:8,marginBottom:14}}>
-          {[["order","🍺 Bestellung"],["returns","♻️ Pfandrückgabe"]].map(([key,label])=>(
-            <button key={key} onClick={()=>setActiveTab(key)} style={{flex:1,padding:"10px",borderRadius:10,border:"2px solid",borderColor:activeTab===key?"#4ade80":"rgba(255,255,255,0.15)",background:activeTab===key?"rgba(74,222,128,0.12)":"rgba(255,255,255,0.04)",color:activeTab===key?"#4ade80":"#d1fae5",fontFamily:"Georgia,serif",fontSize:14,fontWeight:activeTab===key?700:400,cursor:"pointer"}}>{label}</button>
+        <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+          {[["order","🍺 Bestellung"],["returns","♻️ Pfandrückgabe"],["leergut","📦 Leergut"]].map(([key,label])=>(
+            <button key={key} onClick={()=>setActiveTab(key)} style={{flex:1,padding:"10px",borderRadius:10,border:"2px solid",borderColor:activeTab===key?"#4ade80":"rgba(255,255,255,0.15)",background:activeTab===key?"rgba(74,222,128,0.12)":"rgba(255,255,255,0.04)",color:activeTab===key?"#4ade80":"#d1fae5",fontFamily:"Georgia,serif",fontSize:13,fontWeight:activeTab===key?700:400,cursor:"pointer"}}>{label}</button>
           ))}
         </div>
 
-        {/* Getränkeliste */}
-        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {/* Getränkeliste / Leergut */}
+        {activeTab === "leergut" ? (
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{color:"#a5d6a7",fontSize:11,letterSpacing:2,textTransform:"uppercase",marginBottom:4}}>📦 Leergut – nur für interne Abrechnung</div>
+            {LEERGUT_TYPES.map(lg=>{
+              const qty = getLeergutQty(lg.id);
+              const total = getTotalLeergutForType(lg.id);
+              return (
+                <div key={lg.id} style={{background:total>0?"rgba(74,222,128,0.08)":"rgba(255,255,255,0.04)",border:"1px solid",borderColor:total>0?"rgba(74,222,128,0.3)":"rgba(255,255,255,0.1)",borderRadius:14,padding:"12px 16px",display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{flex:1}}>
+                    <div style={{color:"#f0fdf4",fontSize:14,fontWeight:600}}>{lg.name}</div>
+                    <div style={{color:"#6ee7b7",fontSize:11,marginTop:1}}>{fmt(lg.price)} pro Kasten</div>
+                  </div>
+                  {total>0 && <div style={{background:"rgba(74,222,128,0.2)",color:"#4ade80",padding:"2px 7px",borderRadius:20,fontSize:10,fontWeight:700}}>∑ {total}</div>}
+                  <div style={{display:"flex",alignItems:"center",gap:5}}>
+                    <button onClick={()=>handleLeergutChange(lg.id,Math.max(0,(parseInt(qty)||0)-1))} disabled={!selectedPerson} style={{width:30,height:30,borderRadius:7,border:"1px solid rgba(255,255,255,0.2)",background:"rgba(255,255,255,0.08)",color:"#fff",fontSize:18,cursor:selectedPerson?"pointer":"not-allowed",opacity:selectedPerson?1:0.4}}>−</button>
+                    <input type="number" min="0" value={qty} onChange={e=>handleLeergutChange(lg.id,e.target.value)} disabled={!selectedPerson} placeholder="0" style={{width:42,textAlign:"center",padding:"6px 2px",background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:7,color:"#fff",fontSize:14,opacity:selectedPerson?1:0.4}}/>
+                    <button onClick={()=>handleLeergutChange(lg.id,(parseInt(qty)||0)+1)} disabled={!selectedPerson} style={{width:30,height:30,borderRadius:7,border:"1px solid rgba(74,222,128,0.4)",background:"rgba(74,222,128,0.12)",color:"#4ade80",fontSize:18,cursor:selectedPerson?"pointer":"not-allowed",opacity:selectedPerson?1:0.4}}>+</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
           {drinks.map((drink)=>{
             const qty = getQty(drink.id);
             const totalO = getTotalOrdered(drink.id);
@@ -580,6 +664,60 @@ export default function App() {
             );
           })}
         </div>
+        )}
+
+        {/* Sonderwunsch */}
+        <div style={{marginTop:12,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,200,100,0.2)",borderRadius:14,padding:"14px 16px"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+            <div style={{color:"#fde68a",fontSize:13,fontWeight:600}}>✏️ Sonderwunsch</div>
+            {!specialUnlocked && (
+              <button onClick={()=>{setSpecialPwInput("");setSpecialPwError(false);setShowSpecialPw(true);}} style={{background:"rgba(234,179,8,0.15)",border:"1px solid rgba(234,179,8,0.3)",color:"#fde68a",padding:"4px 10px",borderRadius:8,fontSize:11,cursor:"pointer"}}>🔐 Entsperren</button>
+            )}
+            {specialUnlocked && <span style={{color:"#4ade80",fontSize:11}}>✓ Entsperrt</span>}
+          </div>
+          {specialUnlocked && selectedPerson ? (
+            <textarea
+              value={specialWishes[selectedPerson]||""}
+              onChange={e=>handleSpecialWishChange(e.target.value)}
+              placeholder="Sonderwunsch eingeben (z.B. Weissbier Kasten, Sekt...) – Preis wird auf Anfrage ermittelt"
+              rows={3}
+              style={{width:"100%",background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,200,100,0.3)",borderRadius:8,color:"#f0fdf4",fontSize:13,padding:"8px 10px",resize:"vertical",outline:"none",boxSizing:"border-box",fontFamily:"Georgia,serif"}}
+            />
+          ) : (
+            <div style={{color:"rgba(255,255,255,0.35)",fontSize:12}}>
+              {!selectedPerson ? "Bitte zuerst Person auswählen" : "Bitte mit Passwort entsperren um Sonderwunsch einzutragen"}
+            </div>
+          )}
+          {/* Alle Sonderwünsche anzeigen */}
+          {Object.entries(specialWishes).filter(([,v])=>v).length>0 && (
+            <div style={{marginTop:10,paddingTop:10,borderTop:"1px dashed rgba(255,200,100,0.2)"}}>
+              <div style={{color:"#fde68a",fontSize:11,marginBottom:6}}>Aktuelle Sonderwünsche:</div>
+              {persons.filter(p=>specialWishes[p.id]).map(p=>(
+                <div key={p.id} style={{fontSize:12,color:"#fde68a",marginBottom:3}}>
+                  👤 {p.name}: <span style={{color:"rgba(255,255,255,0.7)"}}>{specialWishes[p.id]}</span> <span style={{color:"#f87171",fontSize:11}}>(Preis auf Anfrage)</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Sonderwunsch Passwort Modal */}
+        {showSpecialPw && (
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+            <div style={{background:"#fff",borderRadius:20,padding:28,width:"100%",maxWidth:300,textAlign:"center"}}>
+              <div style={{fontSize:36,marginBottom:8}}>✏️</div>
+              <div style={{fontFamily:"Georgia,serif",fontSize:16,fontWeight:700,marginBottom:6,color:"#1a3a2a"}}>Sonderwunsch</div>
+              <div style={{fontSize:12,color:"#666",marginBottom:16}}>Bitte Passwort eingeben</div>
+              <input type="password" value={specialPwInput} onChange={e=>{setSpecialPwInput(e.target.value);setSpecialPwError(false);}} onKeyDown={e=>e.key==="Enter"&&(specialPwInput===SPECIAL_PW?(setSpecialUnlocked(true),setShowSpecialPw(false)):(setSpecialPwError(true),setSpecialPwInput("")))} placeholder="Passwort" autoFocus
+                style={{width:"100%",padding:"10px 14px",border:specialPwError?"2px solid #dc2626":"2px solid #d1fae5",borderRadius:10,fontSize:16,textAlign:"center",boxSizing:"border-box",marginBottom:8}}/>
+              {specialPwError && <div style={{color:"#dc2626",fontSize:12,marginBottom:8}}>⚠ Falsches Passwort</div>}
+              <div style={{display:"flex",gap:8,marginTop:8}}>
+                <button onClick={()=>setShowSpecialPw(false)} style={{flex:1,padding:9,border:"1px solid #ccc",borderRadius:10,background:"none",cursor:"pointer",fontSize:13}}>Abbrechen</button>
+                <button onClick={()=>{if(specialPwInput===SPECIAL_PW){setSpecialUnlocked(true);setShowSpecialPw(false);}else{setSpecialPwError(true);setSpecialPwInput("");}}} style={{flex:1,padding:9,background:"#1a3a2a",color:"#fff",border:"none",borderRadius:10,cursor:"pointer",fontWeight:700,fontSize:13}}>OK</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Sammelbestellung */}
         <div style={{marginTop:26,background:"rgba(0,0,0,0.3)",border:"1px solid rgba(200,230,200,0.2)",borderRadius:20,overflow:"hidden"}}>
@@ -714,7 +852,7 @@ export default function App() {
       )}
 
       {showAdmin && <AdminModal drinks={drinks} persons={persons} dealerEmail={dealerEmail} deliveryDate={deliveryDate} sendPassword={sendPassword} adminPin={adminPin} onSave={handleAdminSave} onClose={()=>setShowAdmin(false)}/>}
-      {showBilling && <BillingModal drinks={drinks} persons={persons} orders={orders} returns={returns} onClose={()=>setShowBilling(false)}/>}
+      {showBilling && <BillingModal drinks={drinks} persons={persons} orders={orders} returns={returns} leergut={leergut} deliveryDate={deliveryDate} onClose={()=>setShowBilling(false)}/>}
       {showSuccess && <SuccessModal summary={successSummary} onKeep={handleSuccessKeep} onClear={handleSuccessClose}/>}
     </div>
   );
