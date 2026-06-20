@@ -583,18 +583,16 @@ export default function App() {
             ))}
           </div>
           {!selectedPerson && <div style={{color:"#f59e0b",fontSize:12,marginTop:10}}>↑ Bitte zuerst eine Person auswählen</div>}
-          {selectedPerson && (personCost>0||personRet>0) && (
+          {selectedPerson && personCost>0 && (
             <div style={{marginTop:12,display:"flex",gap:16,flexWrap:"wrap",alignItems:"center"}}>
-              {personCost>0 && <span style={{color:"#fde68a",fontSize:13}}>💰 {fmt(personCost)}</span>}
-              {personRet>0 && <span style={{color:"#4ade80",fontSize:13}}>♻️ −{fmt(personRet)}</span>}
-              {personCost>0 && <span style={{color:"#fff",fontSize:14,fontWeight:700}}>= {fmt(personCost-personRet)}</span>}
+              <span style={{color:"#fde68a",fontSize:13}}>💰 {fmt(personCost)}</span>
             </div>
           )}
         </div>
 
         {/* Tabs */}
         <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
-          {[["order","🍺 Bestellung"],["returns","♻️ Pfandrückgabe"],["leergut","📦 Leergut"]].map(([key,label])=>(
+          {[["order","🍺 Bestellung"],["leergut","📦 Leergut"]].map(([key,label])=>(
             <button key={key} onClick={()=>setActiveTab(key)} style={{flex:1,padding:"10px",borderRadius:10,border:"2px solid",borderColor:activeTab===key?"#4ade80":"rgba(255,255,255,0.15)",background:activeTab===key?"rgba(74,222,128,0.12)":"rgba(255,255,255,0.04)",color:activeTab===key?"#4ade80":"#d1fae5",fontFamily:"Georgia,serif",fontSize:13,fontWeight:activeTab===key?700:400,cursor:"pointer"}}>{label}</button>
           ))}
         </div>
@@ -628,7 +626,7 @@ export default function App() {
             const qty = getQty(drink.id);
             const totalO = getTotalOrdered(drink.id);
             const totalR = getTotalReturned(drink.id);
-            const onChange = activeTab==="order" ? handleQtyChange : handleReturnChange;
+            const onChange = handleQtyChange;
             return (
               <div key={drink.id} style={{background:totalO>0?"rgba(74,222,128,0.08)":"rgba(255,255,255,0.04)",border:"1px solid",borderColor:totalO>0?"rgba(74,222,128,0.3)":"rgba(255,255,255,0.1)",borderRadius:14,padding:"13px 16px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
                 <div style={{fontSize:24,flexShrink:0}}>{drink.emoji}</div>
@@ -735,13 +733,11 @@ export default function App() {
               <>
                 {persons.map(p=>{
                   const pd=drinks.filter(d=>(orders[d.id]?.[p.id]||0)>0);
-                  const rd=drinks.filter(d=>(returns[d.id]?.[p.id]||0)>0);
-                  if(!pd.length && !rd.length)return null;
+                  if(!pd.length)return null;
                   const pTotal=pd.reduce((s,d)=>s+(parseInt(orders[d.id]?.[p.id])||0),0);
                   const pEinkauf=pd.reduce((s,d)=>s+(parseInt(orders[d.id]?.[p.id])||0)*(parseFloat(d.price)||0),0);
                   const pPfand=pd.reduce((s,d)=>s+(parseInt(orders[d.id]?.[p.id])||0)*(parseFloat(d.deposit)||0),0);
-                  const pReturnAmt=drinks.reduce((s,d)=>s+(parseInt(returns[d.id]?.[p.id])||0)*(parseFloat(d.deposit)||0),0);
-                  const pZahlen=pEinkauf+pPfand-pReturnAmt;
+                  const pZahlen=pEinkauf+pPfand;
                   return (
                     <div key={p.id} style={{marginBottom:16,background:"rgba(255,255,255,0.04)",borderRadius:12,padding:"12px 14px"}}>
                       <div style={{color:"#f0fdf4",fontSize:14,fontWeight:700,marginBottom:6,display:"flex",alignItems:"center",gap:8}}>
@@ -763,23 +759,9 @@ export default function App() {
                           </div>
                         );
                       })}
-                      {rd.length>0 && (
-                        <div style={{marginTop:6,paddingTop:6,borderTop:"1px dashed rgba(255,255,255,0.1)"}}>
-                          {rd.map(d=>{
-                            const q=parseInt(returns[d.id]?.[p.id])||0;
-                            const r=q*(parseFloat(d.deposit)||0);
-                            return (
-                              <div key={d.id} style={{fontSize:12,paddingLeft:16,marginBottom:3,display:"flex",justifyContent:"space-between",color:"#4ade80"}}>
-                                <span>♻️ {d.emoji} {d.name} {q}× Pfandrückgabe</span>
-                                <span>−{fmt(r)}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
                       <div style={{marginTop:8,paddingTop:6,borderTop:"1px solid rgba(255,255,255,0.15)",display:"flex",justifyContent:"space-between",fontSize:13}}>
                         <div style={{color:"rgba(255,255,255,0.5)",fontSize:11}}>
-                          Getränke {fmt(pEinkauf)} + Pfand {fmt(pPfand)}{pReturnAmt>0?` − Rückgabe ${fmt(pReturnAmt)}`:""}
+                          Getränke {fmt(pEinkauf)} + Pfand {fmt(pPfand)}
                         </div>
                         <div style={{color:"#fde68a",fontWeight:700}}>{fmt(pZahlen)}</div>
                       </div>
@@ -790,24 +772,12 @@ export default function App() {
                   {(()=>{
                     const totalKasten=grandTotal;
                     const totalBrutto=drinks.reduce((s,d)=>s+getTotalOrdered(d.id)*((parseFloat(d.price)||0)+(parseFloat(d.deposit)||0)),0);
-                    const totalPfandBezahlt=drinks.reduce((s,d)=>s+getTotalOrdered(d.id)*(parseFloat(d.deposit)||0),0);
-                    const totalNetto=totalBrutto-totalPfandBezahlt;
-                    const totalRueckgabe=drinks.reduce((s,d)=>s+getTotalReturned(d.id)*(parseFloat(d.deposit)||0),0);
-                    const totalZahlen=totalNetto-totalRueckgabe;
                     return (
                       <div>
-                        <div style={{display:"flex",justifyContent:"space-between",color:"#fde68a",fontSize:15,fontWeight:700,marginBottom:totalRueckgabe>0?4:0}}>
+                        <div style={{display:"flex",justifyContent:"space-between",color:"#fde68a",fontSize:15,fontWeight:700}}>
                           <span>Einkauf + Pfand</span><span>{fmt(totalBrutto)}</span>
                         </div>
-                        {totalRueckgabe>0 && <>
-                          <div style={{display:"flex",justifyContent:"space-between",color:"#4ade80",fontSize:13,marginBottom:6}}>
-                            <span>♻️ Pfandrückgabe</span><span>−{fmt(totalRueckgabe)}</span>
-                          </div>
-                          <div style={{display:"flex",justifyContent:"space-between",color:"#fff",fontSize:16,fontWeight:700,borderTop:"1px solid rgba(255,255,255,0.2)",paddingTop:8}}>
-                            <span>Zu zahlen ({totalKasten} Kästen)</span><span style={{color:"#4ade80"}}>{fmt(totalZahlen)}</span>
-                          </div>
-                        </>}
-                        {totalRueckgabe===0 && <div style={{color:"rgba(255,255,255,0.4)",fontSize:12,marginTop:4}}>{totalKasten} Kästen gesamt</div>}
+                        <div style={{color:"rgba(255,255,255,0.4)",fontSize:12,marginTop:4}}>{totalKasten} Kästen gesamt</div>
                       </div>
                     );
                   })()}
