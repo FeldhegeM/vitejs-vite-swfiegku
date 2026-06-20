@@ -165,11 +165,10 @@ function BillingModal({ drinks, persons, orders, returns, leergut, deliveryDate,
 
     persons.forEach(p => {
       const ordered = drinks.filter(d=>(orders[d.id]?.[p.id]||0)>0);
-      const returned = drinks.filter(d=>(returns[d.id]?.[p.id]||0)>0);
       const lg = LEERGUT_TYPES.filter(l=>(leergut[p.id]?.[l.id]||0)>0);
       const isActive = ordered.length > 0;
       if(!isActive && !lg.length) return;
-      let cost=0, ret=0, lgCost=0;
+      let cost=0, lgCost=0;
       const myDelivery = isActive ? deliveryCost : 0;
 
       lines.push(`----------------------------`);
@@ -187,47 +186,34 @@ function BillingModal({ drinks, persons, orders, returns, leergut, deliveryDate,
         lines.push(``);
       });
 
-      if(returned.length>0){
-        lines.push(`Pfandrueckgabe:`);
-        returned.forEach(d=>{
-          const q=parseInt(returns[d.id]?.[p.id])||0;
-          const r=q*(parseFloat(d.deposit)||0);
-          ret+=r;
-          lines.push(`  ${d.name}: ${q} x ${fmt(parseFloat(d.deposit))} = -${fmt(r)}`);
-        });
-        lines.push(``);
-      }
-
       if(lg.length>0){
-        lines.push(`Leergut:`);
+        lines.push(`Leergut Rueckgabe:`);
         lg.forEach(l=>{
           const q=parseInt(leergut[p.id]?.[l.id])||0;
           const r=q*l.price;
           lgCost+=r;
-          lines.push(`  ${l.name}: ${q} x ${fmt(l.price)} = +${fmt(r)}`);
+          lines.push(`  ${l.name}: ${q} x ${fmt(l.price)} = -${fmt(r)}`);
         });
         lines.push(``);
       }
 
       if(isActive) lines.push(`Lieferkosten (10,00 € / ${activePersons.length} Besteller): ${fmt(myDelivery)}`);
-      lines.push(`ZU ZAHLEN: ${fmt(cost+lgCost-ret+myDelivery)}`);
+      lines.push(`ZU ZAHLEN: ${fmt(cost-lgCost+myDelivery)}`);
       lines.push(``);
     });
 
     // Gesamtübersicht
     const gesamtGetraenke = persons.reduce((s,p)=>s+drinks.reduce((ss,d)=>{ const q=parseInt(orders[d.id]?.[p.id])||0; return ss+q*((parseFloat(d.price)||0)+(parseFloat(d.deposit)||0)); },0),0);
     const gesamtLeergut = persons.reduce((s,p)=>s+LEERGUT_TYPES.reduce((ss,l)=>ss+(parseInt(leergut[p.id]?.[l.id])||0)*l.price,0),0);
-    const gesamtRueckgabe = persons.reduce((s,p)=>s+drinks.reduce((ss,d)=>{ const q=parseInt(returns[d.id]?.[p.id])||0; return ss+q*(parseFloat(d.deposit)||0); },0),0);
     const gesamtLieferkosten = activePersons.length > 0 ? 10 : 0;
     lines.push(`============================`);
     lines.push(`GESAMTUEBERSICHT`);
     lines.push(``);
     lines.push(`Getraenke gesamt:          ${fmt(gesamtGetraenke)}`);
-    if(gesamtLeergut>0)   lines.push(`Leergut gesamt:           +${fmt(gesamtLeergut)}`);
-    if(gesamtRueckgabe>0) lines.push(`Pfandrueckgabe gesamt:    -${fmt(gesamtRueckgabe)}`);
+    if(gesamtLeergut>0) lines.push(`Leergut Rueckgabe gesamt: -${fmt(gesamtLeergut)}`);
     lines.push(`Lieferkosten gesamt:        ${fmt(gesamtLieferkosten)}`);
     lines.push(``);
-    lines.push(`GESAMT ZU ZAHLEN: ${fmt(gesamtGetraenke+gesamtLeergut-gesamtRueckgabe+gesamtLieferkosten)}`);
+    lines.push(`GESAMT ZU ZAHLEN: ${fmt(gesamtGetraenke-gesamtLeergut+gesamtLieferkosten)}`);
     return lines.join("\n");
   };
 
@@ -266,8 +252,7 @@ function BillingModal({ drinks, persons, orders, returns, leergut, deliveryDate,
             if(!isActive && !LEERGUT_TYPES.some(l=>(leergut[p.id]?.[l.id]||0)>0)) return null;
             let cost=0, ret=0;
             ordered.forEach(d=>{ const q=parseInt(orders[d.id]?.[p.id])||0; cost+=q*((parseFloat(d.price)||0)+(parseFloat(d.deposit)||0)); });
-            returned.forEach(d=>{ const q=parseInt(returns[d.id]?.[p.id])||0; ret+=q*(parseFloat(d.deposit)||0); });
-            const lg = LEERGUT_TYPES.filter(l=>(leergut[p.id]?.[l.id]||0)>0);
+            returned.forEach(d=>{ const q=parseInt(returns[d.id]?.[p.id])||0; ret+=q*(parseFloat(d.deposit)||0); });            const lg = LEERGUT_TYPES.filter(l=>(leergut[p.id]?.[l.id]||0)>0);
             let lgCost=0; lg.forEach(l=>{ lgCost+=(parseInt(leergut[p.id]?.[l.id])||0)*l.price; });
             const myDelivery = isActive ? deliveryCost : 0;
             return (
@@ -292,31 +277,16 @@ function BillingModal({ drinks, persons, orders, returns, leergut, deliveryDate,
                       </div>
                     );
                   })}
-                  {returned.length>0 && (
-                    <div style={{marginTop:8,paddingTop:8,borderTop:"1px dashed #ccc"}}>
-                      <div style={{fontSize:12,color:"#666",marginBottom:5}}>♻️ Pfandrückgabe:</div>
-                      {returned.map(d=>{
-                        const q=parseInt(returns[d.id]?.[p.id])||0;
-                        const r=q*(parseFloat(d.deposit)||0);
-                        return (
-                          <div key={d.id} style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4,color:"#16a34a"}}>
-                            <span>{d.emoji} {d.name}: {q} × {fmt(parseFloat(d.deposit))}</span>
-                            <span>−{fmt(r)}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
                   {lg.length>0 && (
                     <div style={{marginTop:8,paddingTop:8,borderTop:"1px dashed #ccc"}}>
-                      <div style={{fontSize:12,color:"#666",marginBottom:5}}>📦 Leergut:</div>
+                      <div style={{fontSize:12,color:"#666",marginBottom:5}}>📦 Leergut Rückgabe:</div>
                       {lg.map(l=>{
                         const q=parseInt(leergut[p.id]?.[l.id])||0;
                         const r=q*l.price;
                         return (
-                          <div key={l.id} style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4,color:"#2563eb"}}>
+                          <div key={l.id} style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4,color:"#16a34a"}}>
                             <span>{l.name}: {q} × {fmt(l.price)}</span>
-                            <span>+{fmt(r)}</span>
+                            <span>−{fmt(r)}</span>
                           </div>
                         );
                       })}
@@ -332,7 +302,7 @@ function BillingModal({ drinks, persons, orders, returns, leergut, deliveryDate,
                   )}
                   <div style={{borderTop:"2px solid #1a3a2a",marginTop:10,paddingTop:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <span style={{fontSize:14,fontWeight:700,color:"#1a3a2a"}}>Zu zahlen</span>
-                    <span style={{fontSize:22,fontWeight:700,color:"#1a3a2a"}}>{fmt(cost+lgCost-ret+myDelivery)}</span>
+                    <span style={{fontSize:22,fontWeight:700,color:"#1a3a2a"}}>{fmt(cost-lgCost+myDelivery)}</span>
                   </div>
                 </div>
               </div>
@@ -344,9 +314,7 @@ function BillingModal({ drinks, persons, orders, returns, leergut, deliveryDate,
             const activePersons = persons.filter(p=>drinks.some(d=>(orders[d.id]?.[p.id]||0)>0));
             const gesamtGetraenke = persons.reduce((s,p)=>s+drinks.reduce((ss,d)=>{ const q=parseInt(orders[d.id]?.[p.id])||0; return ss+q*((parseFloat(d.price)||0)+(parseFloat(d.deposit)||0)); },0),0);
             const gesamtLeergut = persons.reduce((s,p)=>s+LEERGUT_TYPES.reduce((ss,l)=>ss+(parseInt(leergut[p.id]?.[l.id])||0)*l.price,0),0);
-            const gesamtRueckgabe = persons.reduce((s,p)=>s+drinks.reduce((ss,d)=>{ const q=parseInt(returns[d.id]?.[p.id])||0; return ss+q*(parseFloat(d.deposit)||0); },0),0);
             const gesamtLieferkosten = activePersons.length > 0 ? 10 : 0;
-            const gesamtZahlen = gesamtGetraenke - gesamtLeergut - gesamtRueckgabe + gesamtLieferkosten;
             if(activePersons.length === 0) return null;
             return (
               <div style={{marginTop:8,background:"#1a3a2a",borderRadius:14,padding:16}}>
@@ -355,13 +323,8 @@ function BillingModal({ drinks, persons, orders, returns, leergut, deliveryDate,
                   <span>Getränke gesamt</span><span>{fmt(gesamtGetraenke)}</span>
                 </div>
                 {gesamtLeergut>0 && (
-                  <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:"#93c5fd",marginBottom:6}}>
-                    <span>📦 Leergut gesamt</span><span>+{fmt(gesamtLeergut)}</span>
-                  </div>
-                )}
-                {gesamtRueckgabe>0 && (
                   <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:"#4ade80",marginBottom:6}}>
-                    <span>♻️ Pfandrückgabe gesamt</span><span>−{fmt(gesamtRueckgabe)}</span>
+                    <span>📦 Leergut Rückgabe gesamt</span><span>−{fmt(gesamtLeergut)}</span>
                   </div>
                 )}
                 <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:"#fde68a",marginBottom:10}}>
@@ -369,7 +332,7 @@ function BillingModal({ drinks, persons, orders, returns, leergut, deliveryDate,
                 </div>
                 <div style={{borderTop:"1px solid rgba(255,255,255,0.2)",paddingTop:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <span style={{color:"#fff",fontSize:14,fontWeight:700}}>GESAMT ZU ZAHLEN</span>
-                  <span style={{color:"#4ade80",fontSize:20,fontWeight:700}}>{fmt(gesamtGetraenke+gesamtLeergut-gesamtRueckgabe+gesamtLieferkosten)}</span>
+                  <span style={{color:"#4ade80",fontSize:20,fontWeight:700}}>{fmt(gesamtGetraenke-gesamtLeergut+gesamtLieferkosten)}</span>
                 </div>
               </div>
             );
