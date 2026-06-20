@@ -623,6 +623,7 @@ export default function App() {
             })}
           </div>
         ) : (
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
           {drinks.map((drink)=>{
             const qty = getQty(drink.id);
             const totalO = getTotalOrdered(drink.id);
@@ -663,7 +664,7 @@ export default function App() {
               </div>
             );
           })}
-        </div>
+          </div>
         )}
 
         {/* Sonderwunsch */}
